@@ -16,6 +16,27 @@ function num(name: string, fallback: number): number {
   return n;
 }
 
+/**
+ * DEV_TIER_OVERRIDES forces risk tiers during development, e.g.
+ * "GMAIL_SEND_EMAIL:R1,GITHUB_MERGE_A_PULL_REQUEST:R1", so an R2 action can be
+ * iterated on without tapping approve every time.
+ *
+ * It exists so that lowering a tier is a visible, revertible switch rather than an
+ * edit to tiers.ts that someone forgets before the demo. It must be empty for any
+ * rehearsal or demo run: the approval moment is the product (AP-1, D-3).
+ */
+function parseTierOverrides(raw: string): Record<string, "R0" | "R1" | "R2"> {
+  const out: Record<string, "R0" | "R1" | "R2"> = {};
+  for (const entry of raw.split(",").map((e) => e.trim()).filter(Boolean)) {
+    const [slug, tier] = entry.split(":").map((x) => x.trim());
+    if (!slug || (tier !== "R0" && tier !== "R1" && tier !== "R2")) {
+      throw new Error(`DEV_TIER_OVERRIDES entry must look like SLUG:R1, got "${entry}"`);
+    }
+    out[slug.toUpperCase()] = tier;
+  }
+  return out;
+}
+
 export const env = {
   port: num("PORT", 3000),
   publicBaseUrl: opt("PUBLIC_BASE_URL", "http://localhost:3000").replace(/\/$/, ""),
@@ -37,4 +58,6 @@ export const env = {
   realtimeIdleTimeoutMs: num("REALTIME_IDLE_TIMEOUT_MS", 60000),
 
   databasePath: opt("DATABASE_PATH", "./data/otto.sqlite"),
+
+  devTierOverrides: parseTierOverrides(opt("DEV_TIER_OVERRIDES")),
 } as const;

@@ -3,6 +3,10 @@
 // Unknown tools default to R2.
 
 import type { RiskTier } from "@otto/shared";
+import { env } from "../env";
+import { logger } from "../log";
+
+const log = logger("tiers");
 
 // Explicit overrides for the demo toolkits (Section 7.6). These raise or pin a
 // tier; the rules below cannot lower them.
@@ -43,6 +47,16 @@ const higher = (a: RiskTier, b: RiskTier): RiskTier => (RANK[a] >= RANK[b] ? a :
 /** AP-2: the argument override raises the tier; it never lowers it. */
 export function classify(slug: string, args?: unknown): RiskTier {
   const upper = slug.toUpperCase();
+
+  // Development-only escape hatch (5.2). Wins outright, including over the
+  // argument rule, because its entire purpose is to let someone bypass an
+  // approval they would otherwise have to tap every iteration. Logged every time
+  // so it is never quietly in effect.
+  const forced = env.devTierOverrides[upper];
+  if (forced) {
+    log.warn("tier forced by DEV_TIER_OVERRIDES", { slug: upper, tier: forced });
+    return forced;
+  }
 
   let tier: RiskTier;
   const override = TIER_OVERRIDES[upper];

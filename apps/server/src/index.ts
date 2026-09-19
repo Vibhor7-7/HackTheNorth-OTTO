@@ -27,6 +27,18 @@ const sweeper = setInterval(() => {
   }
 }, 15000);
 
+// Impossible to miss on boot: a lowered tier means an action runs without asking.
+const forced = Object.entries(env.devTierOverrides);
+if (forced.length) {
+  log.warn("=".repeat(72));
+  log.warn("DEV_TIER_OVERRIDES IS ACTIVE - risk tiers are being forced", {
+    overrides: forced.map(([s, t]) => `${s}=${t}`).join(","),
+  });
+  log.warn("Anything lowered to R0 or R1 runs WITHOUT an approval. Clear this");
+  log.warn("before any rehearsal or demo: the approval moment is the product.");
+  log.warn("=".repeat(72));
+}
+
 log.info("listening", {
   port: env.port,
   base_url: env.publicBaseUrl,

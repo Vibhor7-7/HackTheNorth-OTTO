@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | Event | Hack the North 2026 |
-| Spec version | 1.7.0 (supersedes 1.6.0) |
+| Spec version | 1.7.1 (supersedes 1.7.0) |
 | Product name | **Otto.** The device, the agent, and the app are all Otto. Use the name in the system prompt, the app, and the pitch. |
 | Status | **Final for build.** Open decisions in Section 13 only. |
 | Tracks | OpenAI API Prizes, Composio, Expo (primary). Rox (natural fit, no extra work). Shopify: cut (D-25). Elastic: cut (D-12). |
@@ -192,6 +192,7 @@ COMPOSIO_USER_ID             # default demo-user
 
 DEMO_MODE                    # true = enable fallbacks in Section 8
 REALTIME_IDLE_TIMEOUT_MS     # default 60000 (VG-13)
+DEV_TIER_OVERRIDES           # dev only, e.g. GMAIL_SEND_EMAIL:R1. MUST be empty for a demo run.
 ```
 
 No per-integration tokens. Composio holds them (CMP-2).
@@ -681,6 +682,14 @@ which is both "sends on the user's behalf" and "public change" in the rules abov
 patterns, so it would otherwise reach R2 only through the unknown-tool default, and
 a pin means it cannot drift to R1 if those patterns change.
 
+**Development escape hatch.** `DEV_TIER_OVERRIDES` (5.2) forces a tier from the
+environment, so an R2 action can be iterated on without tapping approve every time.
+It wins over every rule above, including the argument override, because that is its
+whole purpose. **It must be empty for any rehearsal or demo run** - lowering
+`GMAIL_SEND_EMAIL` removes S0's second beat and all of S2, and the approval moment
+is the product (D-3). The server prints a loud warning at boot whenever it is set,
+and `classify()` logs every forced call.
+
 `GITHUB_CREATE_A_PULL_REQUEST` is pinned **R1** (D-29): opening a pull request
 proposes a change rather than applying one, and closing it undoes it completely, so
 it runs without holding. Merging is the irreversible half and stays R2. It is
@@ -972,6 +981,11 @@ Judge check-ins: OpenAI, Composio and Expo booths early, and once more after sta
 
 ## 17. Changelog
 
+- **1.7.1**: `DEV_TIER_OVERRIDES` added to 5.2 and 7.6 - a development-only switch
+  that forces risk tiers so an R2 action can be iterated on without approving it
+  each time. Deliberately an environment variable rather than an edit to
+  `tiers.ts`, so it is visible and revertible; the server warns loudly at boot and
+  `classify()` logs every forced call. Must be empty for any rehearsal or demo.
 - **1.7.0**: AP-4 implemented. An R2 call now suspends inside the gate and resumes
   when the app decides (D-30), so approve actually executes, deny executes nothing,
   and expiry ends the task as `cancelled`. AP-5 is enforced by re-checking
