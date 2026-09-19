@@ -2,12 +2,10 @@
 
 | | |
 |---|---|
-| Event | Hack the North 2026 (Fri Sep 18 - Sun Sep 20) |
-| Spec version | 1.2.0 (supersedes 1.1.0) |
+| Event | Hack the North 2026 |
+| Spec version | 1.3.0 (supersedes 1.2.0) |
 | Product name | **Otto.** The device, the agent, and the app are all Otto. Use the name in the system prompt, the app, and the pitch. |
 | Status | **Final for build.** Open decisions in Section 13 only. |
-| Today | Saturday Sep 19 |
-| Code freeze | **Saturday 23:59** |
 | Tracks | OpenAI API Prizes, Composio, Expo (primary). Rox, Shopify (natural fit, no extra work). Elastic: cut (D-12). |
 
 
@@ -30,7 +28,7 @@ Single source of truth. Written for teammates and for AI coding assistants (Code
 2. Section 7 contracts are binding. A contract change means: stop, propose, update Section 7 and the Changelog in the same commit.
 3. Ambiguous or conflicting requirement: ask, do not guess. If a Section 13 item blocks you, say so.
 4. Do not build anything in Non-goals (1.4). Do not add features not in this spec.
-5. Simplest thing that satisfies the requirement. 36 hours, hard freeze.
+5. Simplest thing that satisfies the requirement. There is no budget for a second attempt.
 6. No hardcoded secrets. Everything from env (5.2).
 7. **Verify third-party API shapes against current docs before coding them.** Realtime event names, Composio SDK method names, and Expo APIs all changed in the last year. Docs are linked inline. Do not code from memory.
 
@@ -78,7 +76,7 @@ Voice assistants answer questions but cannot get work done across your real tool
 
 ## 2. Constraints
 
-- **Time.** It is Saturday. Friday milestone (talk to the device, hear it back) is either done or is the first thing that happens today. Freeze 23:59. Final 5 to 7 hours are pitch, Devpost, video. No new features after freeze.
+- **Sequence.** Stage 0 in Section 9 (talk to the device, hear it back) gates everything else; if it does not pass, nothing else starts. Feature work stops when the demo locks (Section 9, stage 7); what remains after that is pitch, Devpost and video.
 - **Hardware.** ESP32 with 512 KB RAM. Whole utterances cannot be buffered on device. Audio streams both directions.
 - **Network.** Venue Wi-Fi is hostile to IoT (captive portals, client isolation). Device joins a phone hotspot. Server is publicly reachable over `wss://` and `https://` (laptop + cloudflared, or Railway/Fly).
 - **Team.** 5 people. Section 14.
@@ -211,7 +209,7 @@ No per-integration tokens. Composio holds them (CMP-2).
 |---|---|---|
 | DEV-1 | P0 | `tools/fake-device`: connects to the device WS, streams laptop mic as PCM s16le 24 kHz with `ptt_start` / `ptt_end` on a keypress, plays downstream PCM. Unblocks all server work from hardware and is the stage fallback if the device dies. |
 | DEV-2 | P0 | `pnpm dev` starts the server. `pnpm dev:mobile` starts Expo. `pnpm fake-device` starts DEV-1. All three documented in `AGENTS.md` and `CLAUDE.md`. |
-| DEV-3 | P1 | `pnpm smoke`: runs S1 against the fake device with a pre-recorded utterance and asserts a calendar event was created. Run before every merge to main after noon. |
+| DEV-3 | P1 | `pnpm smoke`: runs S1 against the fake device with a pre-recorded utterance and asserts a calendar event was created. Run before every merge to main. |
 
 ---
 
@@ -232,7 +230,7 @@ Hardware: ESP32, SPH0645LM4H I2S MEMS mic, TLV320DAC3100 I2S DAC, 8 Ω 2 W speak
 | FW-7 | P1 | LED states: connecting (slow blink), idle (off), listening (solid), thinking (fast blink), speaking (breathe), error (triple flash). |
 | FW-8 | P1 | Presses under 250 ms: send `ptt_cancel`, discard. Hard cap utterances at 60 s, then send `ptt_end`. |
 | FW-9 | P2 | Battery level in `hello` and periodic `status`. |
-| FW-10 | P0 | Firmware speaks the JSON control protocol in 7.1. If firmware already speaks the legacy keyword protocol (`START`, `STOP`, `AUDIO_START:24000`, `AUDIO_END`), the server accepts those as aliases (VG-14). Do not rewrite working firmware today to change control-message format. |
+| FW-10 | P0 | Firmware speaks the JSON control protocol in 7.1. If firmware already speaks the legacy keyword protocol (`START`, `STOP`, `AUDIO_START:24000`, `AUDIO_END`), the server accepts those as aliases (VG-14). Do not rewrite firmware that already works just to change control-message format. |
 
 ### 6.2 Voice Gateway (VG)
 
@@ -373,7 +371,7 @@ The OpenAI track asks for Codex as a development teammate and evidence of how it
 | DEVX-1 | P0 | `AGENTS.md` at repo root pointing Codex at this spec, with run commands and the "reference requirement IDs in commits" rule. |
 | DEVX-2 | P0 | At least four substantive Codex-authored changes land as separate PRs or clearly attributed commits (`codex:` prefix or PR label). Candidates in 11.1. |
 | DEVX-3 | P0 | Before the Devpost is written, collect: screenshots of Codex cloud tasks or CLI sessions, PR links, and a two-line note per use case on what it did and what you would have skipped without it. Store in `docs/codex-evidence.md`. |
-| DEVX-4 | P1 | One Codex code review pass on `apps/server/src/gateway` before freeze, with findings logged. |
+| DEVX-4 | P1 | One Codex code review pass on `apps/server/src/gateway` once its P0s pass, with findings logged. |
 
 ### 6.9 Action item extraction (ACT)
 
@@ -725,30 +723,40 @@ Optional warm-up (5 s, fast lane): "Am I free Thursday afternoon?" Otto answers 
 
 - Agent builds a cart (R0/R1), requests approval with item, total, and address (R2), places the order on YES.
 - Pass: approval SMS shows correct facts; on YES the order is placed or reaches the final confirm screen; on NO nothing happens and the device says so.
-- **Known risk:** verify by Saturday noon whether Composio's catalog has a usable food-delivery toolkit (OD-5). If not: (a) a Composio browser-automation toolkit against a logged-in session, (b) a different food service Composio does support, (c) a mock ordering tool registered as a custom Composio tool that behaves realistically and is labelled as a demo in the app. Do not let S3 consume time S1 and S2 need.
+- **Known risk:** verify that Composio's catalog has a usable food-delivery toolkit (OD-5) before writing any S3 code. If not: (a) a Composio browser-automation toolkit against a logged-in session, (b) a different food service Composio does support, (c) a mock ordering tool registered as a custom Composio tool that behaves realistically and is labelled as a demo in the app. Do not let S3 consume effort S1 and S2 need.
 
 ---
 
-## 9. Build order (Saturday)
+## 9. Build order
 
-Times are targets from a morning start. If it is later than that, compress from the bottom, not the top. The freeze does not move.
+Stages are a **dependency order, not a schedule**. A stage is done when its check
+passes. Nothing in a later stage starts until every P0 in the earlier ones passes.
+If work has to be dropped, drop from the bottom.
 
-| Slot | Milestone | Requirements |
+| Stage | Done when | Requirements |
 |---|---|---|
-| **Now** | Confirm Friday milestone: hold button, ask a question, hear the answer from the speaker. If not done, nothing else starts until it is. | DEV-1, VG-1 to VG-5, VG-13, FW-1 to FW-6 |
-| **09:00 to 11:00** | Transcription persisted, function tool routing works, `run_task` returns "on it". | VG-6, VG-8, VG-15, AG-1, DATA-1, DATA-2 |
-| **11:00 to 13:00** | Composio wired: discovery returns Calendar tools, execute creates an event through the gate. **S1 passes from fake device.** | CMP-1, CMP-2, CMP-3, CMP-5, CMP-8, AP-1, AP-2, AG-2 to AG-5, AG-7 |
-| **13:00 to 15:00** | SMS approvals end to end. Connect Link flow end to end. **S0 + S1 pass from fake device.** Home tab against real data: Needs you, recent activity, Task detail. | AP-3 to AP-6, AP-8, CMP-4, APP-1, APP-2, APP-7, APP-13, APP-15 |
-| **15:00 to 17:00** | **S1 passes from real hardware on the stage network path.** S2 passes from fake device. Action items extracting and approvable from Home. Context tab (transcript + notes). Connections tab. Calendar fast lane: "am I free at 3" answered in one turn. | FW-10, VG-14, NF-6, VG-16, CMP-9, ACT-1 to ACT-4, ACT-7, AG-12, DATA-4, DATA-6, APP-3, APP-6, APP-11, APP-4, CMP-6 |
-| **17:00 to 19:00** | S2 from hardware. S3 per OD-5. Messy-data beat verified (AG-9). Chat tab streaming with read tools. Native polish pass (APP-10). | AG-6, AG-9, AG-11, CHAT-1 to CHAT-3, CHAT-6, DATA-7, APP-12, APP-10 |
-| **19:00 to 21:00** | P1 polish only: LED states, memory injection, Otto mentions action items, chat can start tasks, citations, settings, badges, Codex review. **Record backup videos for S0/S1, S2, S3, and the Home action-item approve.** | FW-7, AG-8, ACT-5, ACT-6, CHAT-4, CHAT-5, CHAT-7, APP-5, APP-14, DEVX-4 |
-| **21:00 to 23:59** | Full dry runs, twice each, from hardware. Codex evidence collected. Bug fixes only. | DEVX-3, success criteria 1 |
-| **23:59** | **Freeze.** |
-| **Sunday** | Pitch, Devpost, video edit, judge check-ins. No code except a demo-breaking bug. | Section 16 |
+| **0. Talk to the device** | Hold the button, ask a question, hear the answer from the speaker. **Nothing else starts until this passes.** | DEV-1, VG-1 to VG-5, VG-13, FW-1 to FW-6 |
+| **1. Turns persist and delegate** | Transcription is persisted per turn, function tool routing works, and `run_task` returns so Otto says "on it". | VG-6, VG-8, VG-15, AG-1, DATA-1, DATA-2 |
+| **2. Composio wired** | Discovery returns Calendar tools and execute creates a real event through the gate. **S1 passes from the fake device.** | CMP-1, CMP-2, CMP-3, CMP-5, CMP-8, AP-1, AP-2, AG-2 to AG-5, AG-7 |
+| **3. Approvals and connections** | SMS approvals end to end. Connect Link end to end. **S0 + S1 pass from the fake device.** Home tab on real data: Needs you, recent activity, Task detail. | AP-3 to AP-6, AP-8, CMP-4, APP-1, APP-2, APP-7, APP-13, APP-15 |
+| **4. Real hardware** | **S1 passes from the physical device on the stage network path.** S2 passes from the fake device. Action items extract and are approvable from Home. Context tab (transcript + notes) and Connections tab are done. The fast lane answers "am I free at 3" in one turn. | FW-10, VG-14, NF-6, VG-16, CMP-9, ACT-1 to ACT-4, ACT-7, AG-12, DATA-4, DATA-6, APP-3, APP-6, APP-11, APP-4, CMP-6 |
+| **5. Remaining scenarios** | S2 passes from hardware. S3 per OD-5. Messy-data beat verified (AG-9). Chat tab streams with read tools. Native polish pass (APP-10). | AG-6, AG-9, AG-11, CHAT-1 to CHAT-3, CHAT-6, DATA-7, APP-12, APP-10 |
+| **6. P1 polish** | Started only once every P0 above passes. Backup videos recorded for S0/S1, S2, S3 and the Home action-item approve. | FW-7, AG-8, ACT-5, ACT-6, CHAT-4, CHAT-5, CHAT-7, APP-5, APP-14, DEVX-4 |
+| **7. Locked** | Every demo scenario passes twice in a row from hardware. Codex evidence collected. **Bug fixes only from here; no new features.** | DEVX-3, success criteria 1 |
+| **8. Submission** | Pitch, Devpost, video. No code except a demo-breaking bug. | Section 16 |
 
-**Cut rule for the fast lane.** If either calendar tool has a p95 over 2 s on the stage network, or it has caused one frozen turn in rehearsal, remove it from CMP-9. Calendar questions then go through `run_task` like everything else. Do not debug it past 18:00.
+**Cut rule for the fast lane.** If either calendar tool has a p95 over 2 s on the
+stage network, or it has caused one frozen turn in rehearsal, remove it from
+CMP-9. Calendar questions then go through `run_task` like everything else. It gets
+one attempt at a fix; if that does not work, cut it and move on.
 
-**Cut rule for the app.** If S2 has not passed from hardware by 17:30, the Chat tab (CHAT-*, APP-12) drops to P1 and its slot goes to S2. The other three tabs stay P0. A demo with three excellent tabs beats four half-done ones, and the Expo judges will notice the difference.
+**Cut rule for the app.** If stage 5 is reached and S2 still has not passed from
+hardware, the Chat tab (CHAT-*, APP-12) drops to P1 and its effort goes to S2. The
+other three tabs stay P0. A demo with three excellent tabs beats four half-done
+ones, and the Expo judges will notice the difference.
+
+**Cut rule in general.** Priority beats stage: no P1 in a component until its P0s
+pass, and no P2 until all three demo scenarios pass end to end (Section 0).
 
 ---
 
@@ -761,7 +769,7 @@ Times are targets from a morning start. If it is later than that, compress from 
 | NF-3 | One command starts each component (DEV-2). |
 | NF-4 | Structured logs with `turn_id` and `task_id` on every line. A failed demo run is debuggable in under a minute. |
 | NF-5 | No secret in firmware other than `DEVICE_TOKEN` and Wi-Fi credentials. No secret in the mobile bundle other than `APP_API_KEY`. All integration tokens live in Composio. |
-| NF-6 | A full dry run on the stage network path (hotspot + public URL) happens before freeze. |
+| NF-6 | A full dry run on the stage network path (hotspot + public URL) passes. No demo counts as ready until it has. |
 | NF-7 | Realtime sessions are never left open. Idle timeout and `finally` close on every path (VG-13). Spending cap set on the OpenAI account before the first session opens. |
 
 ---
@@ -791,7 +799,7 @@ Every model call in the system is OpenAI. Say that in the pitch.
 | 5 | Downstream audio pacing (VG-4): a token-bucket that releases PCM at real-time rate | Small, tricky timing code that benefits from a written test | VG-4 |
 | 6 | Risk classifier and the approval state machine with expiry, plus unit tests | Rule-based logic with clear cases | AP-1 to AP-5, 7.6 |
 | 7 | Expo screens from the contract types: Activity, Task detail, Approvals | UI from a typed API | APP-1 to APP-3 |
-| 8 | Code review of the gateway before freeze | Codex review surface | DEVX-4 |
+| 8 | Code review of the gateway once its P0s pass | Codex review surface | DEVX-4 |
 | 9 | Draft the Devpost README from this spec and the step logs | Writing task with full context in repo | Section 16 |
 
 **Evidence to capture:** PR list with the `codex:` label, screenshots of two cloud tasks or CLI sessions, and `docs/codex-evidence.md` with one paragraph per use case: what Codex did, what you changed, what you would have skipped without it. The last question is what the judges are actually asking.
@@ -830,41 +838,41 @@ See D-12. The honest reason: it would not make the hack easier and it would not 
 
 ## 12. Decision log
 
-| ID | Date | Decision | Reason |
-|---|---|---|---|
-| D-1 | Sep 17 | Wearable assistant, "do anything anywhere". Ambitious demo over track fitting. | Last year's winners had standout demos. |
-| D-2 | Sep 17 | Expo mobile app, no web app. | Seamless next to a wearable; opens the Expo track. |
-| D-3 | Sep 17 | Money and high-impact actions need SMS confirmation. | Safety, and a physical trust moment on stage. |
-| D-4 | Sep 17 | Complete by Saturday 23:59; final hours are pitch, Devpost, video. | Pitch quality decides. |
-| D-5 | Sep 18 | Server is Node/TypeScript. | One language with the app, shared types. |
-| D-6 | Sep 18 | Voice is OpenAI Realtime, audio to audio. | Chained transcribe-LLM-TTS would not meet NF-1. |
-| D-7 | Sep 18 | Push-to-talk only. `turn_detection: null`; `ptt_end` drives commit. | Reliable in a loud venue, fits 512 KB, and "not always listening" is the product stance. |
-| D-8 | Sep 18 | Device talks only to our server. | Keys off device; no TLS/JSON/base64 work on the ESP32. |
-| D-9 | Sep 18 | Two-layer brain: Realtime for conversation, Task Agent for actions. | Voice stays fast; approvals cannot be bypassed. |
-| **D-10** | Sep 19 | **Composio replaces the custom MCP registry (MCP-1 to MCP-5) and live directory discovery (MCP-4).** | Composio provides discovery, managed OAuth, and execution across 1,500+ apps. Our hand-built version would have been 8 to 10 hours of the riskiest code in the project and would still have hit the auth wall that Connect Link solves. Zero per-integration tokens in env. |
-| **D-11** | Sep 19 | **Approval gate sits between LLM tool selection and Composio execution, not inside Composio's meta-tool loop.** | AG-3 must hold. If the SDK cannot separate search/auth/execute, use the before-execute modifier as the gate. |
-| **D-12** | Sep 19 | **Elastic is cut.** DATA-5 removed. | The user's own criterion: include only if it makes the hack easier and helps voice latency or retrieval. It does neither. Voice latency is Realtime-bound and no retrieval happens on that path (VG-10). Tool discovery is Composio's. Memory at hackathon scale (under 200 turns) is served by SQLite in under 5 ms. Elastic would add a hosted dependency, an ingestion pipeline, and an unfamiliar query language for no user-visible change in the demo. |
-| **D-13** | Sep 19 | **Realtime input transcription is the only transcript source.** Cohere (VG-12, OD-4) removed. | No Cohere track this year. Realtime transcription is one config line and produces both user and assistant text with zero extra latency. |
-| **D-14** | Sep 19 | **Task Agent LLM is OpenAI via the Responses API.** Resolves OD-3. | "OpenAI stack for everything possible" is a stated goal and a track requirement. Keep it behind `agent/llm.ts` anyway. |
-| **D-15** | Sep 19 | **JSON control protocol (7.1) is canonical; legacy keyword frames are accepted as aliases (VG-14).** | Firmware may already speak the keyword form. Do not rewrite working firmware on Saturday. The server absorbs the difference in one function. |
-| **D-16** | Sep 19 | **S0 (connect a tool live) is folded into S1 as its opening 20 seconds and Gmail is deliberately left unconnected.** | The live Connect Link is the strongest single beat available and the Composio track's whole thesis. Pre-connecting it would remove the demo. |
-| **D-17** | Sep 19 | AG-7 (agent finds its own tools) and AG-9 (messy data handling) promoted from P1 to P0. | Composio makes AG-7 nearly free. AG-9 is the S1 demo beat and the Rox rubric. |
-| **D-18** | Sep 19 | **Project is named Otto.** Resolves OD-7. | Used in the Realtime instructions, the chat prompt, the app, and the pitch. One name for device, agent, and app. |
-| **D-19** | Sep 19 | **App is four tabs: Home, Context, Connections, Chat.** Activity feed folds into Home; Task detail is a pushed screen. | Matches the team's UI plan. Fewer top-level surfaces, each with one job. |
-| **D-20** | Sep 19 | **Action items are extracted per turn by the cheapest OpenAI model that returns clean JSON, off the voice path, and approved with one tap. Approval creates a normal Task.** | The Home tab needs something to show that the device is paying attention between commands. Routing approval through `run_task` means the risk gate and step log apply unchanged (AG-12). |
-| **D-21** | Sep 19 | **The Chat tab is a read-mostly context agent. Its only write is `run_task`.** | Talking to Otto about your day is a memory feature, not an action feature. Keeping Composio out of it preserves AG-3 and keeps the chat fast. |
-| **D-22** | Sep 19 | **When SMS is off or fails, the Home tab is the confirmation surface and Otto says so aloud.** | The demo works with or without a working SMS number. One code path decides which sentence Otto speaks. |
-| **D-23** | Sep 19 | **Fast lane: two read-only Google Calendar tools registered directly on the Realtime session, executed by the gateway through the gate, 2.5 s timeout, escalation to `run_task`. Realtime's remote MCP feature stays off. Closes OD-8 with the precise version.** | OD-8 conflated "tools on the voice agent" with "tools the gateway does not execute." Function tools are executed by us, so nothing bypasses the gate. The real limit is that the voice model cannot speak during an outstanding call, so the lane is read-only, capped at two, and timed out. Calendar is the only one the demo needs. If it is flaky, delete it from CMP-9 and nothing else changes. |
+| ID | Decision | Reason |
+|---|---|---|
+| D-1 | Wearable assistant, "do anything anywhere". Ambitious demo over track fitting. | Last year's winners had standout demos. |
+| D-2 | Expo mobile app, no web app. | Seamless next to a wearable; opens the Expo track. |
+| D-3 | Money and high-impact actions need SMS confirmation. | Safety, and a physical trust moment on stage. |
+| D-4 | Feature work stops when the demo locks (Section 9, stage 7); what remains is pitch, Devpost and video. | Pitch quality decides. |
+| D-5 | Server is Node/TypeScript. | One language with the app, shared types. |
+| D-6 | Voice is OpenAI Realtime, audio to audio. | Chained transcribe-LLM-TTS would not meet NF-1. |
+| D-7 | Push-to-talk only. `turn_detection: null`; `ptt_end` drives commit. | Reliable in a loud venue, fits 512 KB, and "not always listening" is the product stance. |
+| D-8 | Device talks only to our server. | Keys off device; no TLS/JSON/base64 work on the ESP32. |
+| D-9 | Two-layer brain: Realtime for conversation, Task Agent for actions. | Voice stays fast; approvals cannot be bypassed. |
+| **D-10** | **Composio replaces the custom MCP registry (MCP-1 to MCP-5) and live directory discovery (MCP-4).** | Composio provides discovery, managed OAuth, and execution across 1,500+ apps. Our hand-built version would have been the riskiest code in the project and would still have hit the auth wall that Connect Link solves. Zero per-integration tokens in env. |
+| **D-11** | **Approval gate sits between LLM tool selection and Composio execution, not inside Composio's meta-tool loop.** | AG-3 must hold. If the SDK cannot separate search/auth/execute, use the before-execute modifier as the gate. |
+| **D-12** | **Elastic is cut.** DATA-5 removed. | The user's own criterion: include only if it makes the hack easier and helps voice latency or retrieval. It does neither. Voice latency is Realtime-bound and no retrieval happens on that path (VG-10). Tool discovery is Composio's. Memory at hackathon scale (under 200 turns) is served by SQLite in under 5 ms. Elastic would add a hosted dependency, an ingestion pipeline, and an unfamiliar query language for no user-visible change in the demo. |
+| **D-13** | **Realtime input transcription is the only transcript source.** Cohere (VG-12, OD-4) removed. | No Cohere track this year. Realtime transcription is one config line and produces both user and assistant text with zero extra latency. |
+| **D-14** | **Task Agent LLM is OpenAI via the Responses API.** Resolves OD-3. | "OpenAI stack for everything possible" is a stated goal and a track requirement. Keep it behind `agent/llm.ts` anyway. |
+| **D-15** | **JSON control protocol (7.1) is canonical; legacy keyword frames are accepted as aliases (VG-14).** | Firmware may already speak the keyword form. Do not rewrite firmware that already works. The server absorbs the difference in one function. |
+| **D-16** | **S0 (connect a tool live) is folded into S1 as its opening 20 seconds and Gmail is deliberately left unconnected.** | The live Connect Link is the strongest single beat available and the Composio track's whole thesis. Pre-connecting it would remove the demo. |
+| **D-17** | AG-7 (agent finds its own tools) and AG-9 (messy data handling) promoted from P1 to P0. | Composio makes AG-7 nearly free. AG-9 is the S1 demo beat and the Rox rubric. |
+| **D-18** | **Project is named Otto.** Resolves OD-7. | Used in the Realtime instructions, the chat prompt, the app, and the pitch. One name for device, agent, and app. |
+| **D-19** | **App is four tabs: Home, Context, Connections, Chat.** Activity feed folds into Home; Task detail is a pushed screen. | Matches the team's UI plan. Fewer top-level surfaces, each with one job. |
+| **D-20** | **Action items are extracted per turn by the cheapest OpenAI model that returns clean JSON, off the voice path, and approved with one tap. Approval creates a normal Task.** | The Home tab needs something to show that the device is paying attention between commands. Routing approval through `run_task` means the risk gate and step log apply unchanged (AG-12). |
+| **D-21** | **The Chat tab is a read-mostly context agent. Its only write is `run_task`.** | Talking to Otto about your day is a memory feature, not an action feature. Keeping Composio out of it preserves AG-3 and keeps the chat fast. |
+| **D-22** | **When SMS is off or fails, the Home tab is the confirmation surface and Otto says so aloud.** | The demo works with or without a working SMS number. One code path decides which sentence Otto speaks. |
+| **D-23** | **Fast lane: two read-only Google Calendar tools registered directly on the Realtime session, executed by the gateway through the gate, 2.5 s timeout, escalation to `run_task`. Realtime's remote MCP feature stays off. Closes OD-8 with the precise version.** | OD-8 conflated "tools on the voice agent" with "tools the gateway does not execute." Function tools are executed by us, so nothing bypasses the gate. The real limit is that the voice model cannot speak during an outstanding call, so the lane is read-only, capped at two, and timed out. Calendar is the only one the demo needs. If it is flaky, delete it from CMP-9 and nothing else changes. |
 
 ---
 
 ## 13. Open decisions
 
-| ID | Question | Recommended default | Decide by |
+| ID | Question | Recommended default | Blocks |
 |---|---|---|---|
-| OD-2 | SMS provider: Twilio or Linq? | Try Linq (sponsor) for 45 minutes. If inbound webhooks are not working, Twilio. Provision the number **now**; verification can take hours. | Sat noon |
-| OD-5 | How does S3 execute? | Check Composio's catalog for a food-delivery toolkit first. Then (a) browser toolkit, (b) supported alternative service, (c) mock custom tool labelled as demo. | Sat noon |
-| OD-9 | Hosting: laptop + cloudflared, or Railway? | cloudflared. Zero deploy step, and the laptop is on stage anyway. Have the Railway config ready as a fallback if the tunnel is flaky on the venue uplink. | Sat 15:00 (NF-6) |
+| OD-2 | SMS provider: Twilio or Linq? | Try Linq (sponsor) first. If inbound webhooks are not working, Twilio. **Provision the number before anything else in stage 3**; verification is not instant. | AP-3, stage 3 |
+| OD-5 | How does S3 execute? | Check Composio's catalog for a food-delivery toolkit first. Then (a) browser toolkit, (b) supported alternative service, (c) mock custom tool labelled as demo. | S3, stage 5 |
+| OD-9 | Hosting: laptop + cloudflared, or Railway? | cloudflared. Zero deploy step, and the laptop is on stage anyway. Have the Railway config ready as a fallback if the tunnel is flaky on the venue uplink. | NF-6, stage 4 |
 | ~~OD-1, OD-3, OD-4, OD-6, OD-7, OD-8~~ | | Resolved: D-10, D-14, D-13, Section 11, D-18, D-23. | |
 
 ---
@@ -879,10 +887,10 @@ See D-12. The honest reason: it would not make the hack easier and it would not 
 | Approvals + SMS (AP) | Alison | frontend 2 |
 | Action items + Context agent (ACT, CHAT) | Vibhor, after VG P0s pass | Alison |
 | Mobile app (APP) | frontend 1, frontend 2 | |
-| Demo script, rehearsals, judge check-ins | Alison from Sat morning; everyone after freeze | |
+| Demo script, rehearsals, judge check-ins | Alison owns it throughout; everyone once the demo locks | |
 | Codex evidence (DEVX) | whoever lands each PR; Alison collates | |
 
-Judge check-ins: OpenAI, Composio, and Expo booths early Saturday and again mid-afternoon. Ask Composio specifically whether Tool Router exposes search, connect, and execute separately (CMP-8). Record answers under "Judge notes" below this table.
+Judge check-ins: OpenAI, Composio and Expo booths early, and once more after stage 3. Ask Composio specifically whether Tool Router exposes search, connect, and execute separately (CMP-8). Record answers under "Judge notes" below this table.
 
 **Judge notes**
 
@@ -896,18 +904,18 @@ Judge check-ins: OpenAI, Composio, and Expo booths early Saturday and again mid-
 |---|---|---|
 | Venue Wi-Fi blocks the ESP32 | High | Phone hotspot for the device, public server URL, NF-6 dry run |
 | Hardware fails on stage | Medium | DEV-1 fake device on a laptop, backup videos |
-| Choppy or overflowing device playback | Medium | VG-4 pacing, FW-5 ring buffer, tune first thing today |
+| Choppy or overflowing device playback | Medium | VG-4 pacing, FW-5 ring buffer, tuned in stage 0 |
 | TLS on ESP32 eats memory | Medium | Test `wss://` early; tiny JSON; no base64 on device |
 | Composio SDK shape differs from memory | High | CMP-8: read docs before coding; pin version; ask at booth |
-| Composio has no food-delivery toolkit | High | OD-5 deadline noon; mock fallback labelled honestly |
+| Composio has no food-delivery toolkit | High | Resolve OD-5 before any S3 code; mock fallback labelled honestly |
 | Connect Link redirect does not return to the app cleanly | Medium | The link can complete in Safari; the app polls `/api/connections` and the server resumes on Composio's callback regardless of where the browser lands |
 | SMS delivery delay on stage | Medium | AP-6 in-app approve as fallback; test on the stage hotspot |
 | Realtime session left open, surprise bill | Medium | VG-13, NF-7, spending cap |
 | Realtime event names differ from this spec | Medium | Verify against current docs before coding VG; 7.5 is the last-known shape |
-| Scope creep Saturday evening | High | Priority rule in Section 0; freeze in D-4; Section 9 slots |
+| Scope creep late in the build | High | Priority rule in Section 0; D-4; the Section 9 stage order |
 | Two Sams beat feels contrived | Low | It is the same ambiguity every real contact list has; say so in one sentence |
 | Action item extraction produces junk on stage | Medium | Confidence threshold (ACT-2), commitment-only rule (ACT-6), seeded turns (ACT-7). Rehearse the exact sentence that produces the meeting item. |
-| Chat tab is half-built at freeze | Medium | Cut rule in Section 9. A hidden tab is better than a broken one. |
+| Chat tab is half-built when the demo locks | Medium | Cut rule in Section 9. A hidden tab is better than a broken one. |
 | Fast-lane calendar call freezes a voice turn | Medium | 2.5 s timeout with `deferred` escalation (VG-16), barge-in abandons the call (VG-5), cut rule in Section 9. |
 | Four tabs dilute the frontend owners | Medium | Home first, then Context, then Connections, then Chat. Each tab ships complete before the next starts. |
 
@@ -932,7 +940,7 @@ Judge check-ins: OpenAI, Composio, and Expo booths early Saturday and again mid-
 - Rox: "Speech is the messiest data in any company. Ours knows when it misheard you."
 - Finalists: "We were annoyed that thoughts die in hallways. So we made a button."
 
-**Devpost checklist (Sunday morning):**
+**Devpost checklist:**
 - [ ] Otto: one-liner, 3 screenshots (Home with an action item, the Needs you card, device on a person)
 - [ ] 60 to 90 s video: the three beats, no slides, captions for what the SMS says
 - [ ] Architecture diagram from Section 3
@@ -947,7 +955,16 @@ Judge check-ins: OpenAI, Composio, and Expo booths early Saturday and again mid-
 
 ## 17. Changelog
 
-- **1.2.0** (Sep 19): Fast lane added: two read-only Google Calendar tools on the Realtime session, gateway-executed through the gate with 2.5 s timeout and escalation to `run_task` (VG-16, VG-17, CMP-9, 7.4, D-23). OD-8 closed with the precise version: remote MCP off, gateway-executed function tools on. VG-5 extended to abandon outstanding fast-lane calls on barge-in. Cut rule for the fast lane in Section 9. Optional S1 warm-up line.
-- **1.1.0** (Sep 19): Named Otto (D-18). App restructured into four tabs, Home / Context / Connections / Chat (D-19, APP-* rewritten, APP-11 to APP-15 added, APP-9 removed). Action item extraction worker (6.9, ACT-1 to ACT-7, D-20). Context agent for the Chat tab (6.10, CHAT-1 to CHAT-7, D-21). `run_task` as the single Task entry point with `source` (AG-12). Home as the confirmation surface when SMS is off (D-22, AP-6, VG-10). New endpoints for home, turns, action items, memories, extension connect, chat (7.2). ActionItem, Memory, ChatMessage, HomePayload, TaskSource added (7.3). DATA-4 to P0, DATA-6 and DATA-7 added. Build order and cut rule updated. Ownership, risks, and pitch updated.
-- **1.0.0** (Sep 19): Final build spec. Composio replaces the MCP layer (D-10, D-11, CMP-*). Elastic cut (D-12). Cohere removed (D-13). Task agent on OpenAI Responses (D-14). Legacy device protocol accepted as aliases (D-15, VG-14, FW-10). S0 live-connect beat added (D-16, CMP-4, AP-8, APP-7). AG-7 and AG-9 promoted to P0 (D-17). Realtime session config and transcription pinned in 7.5. Risk rules for Composio slugs in 7.6. Codex evidence requirements added (DEVX-*). Saturday build order rewritten by slot. Session cleanup and cost controls added (VG-13, NF-7). Tracks section added (11).
-- **0.1.0** (Sep 18): Initial spec.
+- **1.3.0**: All project scheduling removed; the spec is task-based. Section 9 is
+  now a dependency order of nine stages with a "done when" check each, replacing
+  the clock-slot table. Cut rules restated against stages rather than times.
+  Section 13's "Decide by" column became "Blocks". Decision log and changelog
+  dates dropped; the header no longer carries an event date, a current date or a
+  freeze time. Technical timings are untouched and remain binding: NF-1's 1.5 s
+  p50, the 2.5 s fast-lane timeout, Composio's 30 s execute timeout, the 5 minute
+  approval expiry, `REALTIME_IDLE_TIMEOUT_MS`, and the demo's own pacing in
+  Sections 8 and 16.
+- **1.2.0**: Fast lane added: two read-only Google Calendar tools on the Realtime session, gateway-executed through the gate with 2.5 s timeout and escalation to `run_task` (VG-16, VG-17, CMP-9, 7.4, D-23). OD-8 closed with the precise version: remote MCP off, gateway-executed function tools on. VG-5 extended to abandon outstanding fast-lane calls on barge-in. Cut rule for the fast lane in Section 9. Optional S1 warm-up line.
+- **1.1.0**: Named Otto (D-18). App restructured into four tabs, Home / Context / Connections / Chat (D-19, APP-* rewritten, APP-11 to APP-15 added, APP-9 removed). Action item extraction worker (6.9, ACT-1 to ACT-7, D-20). Context agent for the Chat tab (6.10, CHAT-1 to CHAT-7, D-21). `run_task` as the single Task entry point with `source` (AG-12). Home as the confirmation surface when SMS is off (D-22, AP-6, VG-10). New endpoints for home, turns, action items, memories, extension connect, chat (7.2). ActionItem, Memory, ChatMessage, HomePayload, TaskSource added (7.3). DATA-4 to P0, DATA-6 and DATA-7 added. Build order and cut rule updated. Ownership, risks, and pitch updated.
+- **1.0.0**: Final build spec. Composio replaces the MCP layer (D-10, D-11, CMP-*). Elastic cut (D-12). Cohere removed (D-13). Task agent on OpenAI Responses (D-14). Legacy device protocol accepted as aliases (D-15, VG-14, FW-10). S0 live-connect beat added (D-16, CMP-4, AP-8, APP-7). AG-7 and AG-9 promoted to P0 (D-17). Realtime session config and transcription pinned in 7.5. Risk rules for Composio slugs in 7.6. Codex evidence requirements added (DEVX-*). Build order rewritten by stage. Session cleanup and cost controls added (VG-13, NF-7). Tracks section added (11).
+- **0.1.0**: Initial spec.
