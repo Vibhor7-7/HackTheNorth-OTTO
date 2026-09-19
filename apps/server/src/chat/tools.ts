@@ -168,7 +168,9 @@ function dispatch(name: string, args: Record<string, unknown>): ToolOutcome {
           ...started,
           note:
             "The task is now running. You do NOT have its result. Tell the user you are on it " +
-            "and that the answer will appear on their Home tab. Do not state or guess the answer.",
+            "and that the answer will appear just below your message. Do not send them to another " +
+            "tab: this task is cited on your reply, and CHAT-5 renders that citation as a live card " +
+            "under it that fills in as the task runs. Do not state or guess the answer.",
         },
         citations: [{ kind: "task", id: started.task_id }],
       };
