@@ -1,9 +1,10 @@
-# [PROJECT_NAME] - Product Requirements and Implementation Spec
+# Otto - Product Requirements and Implementation Spec
 
 | | |
 |---|---|
 | Event | Hack the North 2026 (Fri Sep 18 - Sun Sep 20) |
-| Spec version | 1.0.0 (supersedes 0.1.0) |
+| Spec version | 1.1.0 (supersedes 1.0.0) |
+| Product name | **Otto.** The device, the agent, and the app are all Otto. Use the name in the system prompt, the app, and the pitch. |
 | Status | **Final for build.** Open decisions in Section 13 only. |
 | Today | Saturday Sep 19 |
 | Code freeze | **Saturday 23:59** |
@@ -38,7 +39,7 @@ Single source of truth. Written for teammates and for AI coding assistants (Code
 
 ### 1.1 One-liner
 
-A push-to-talk wearable that lets you hand off real tasks by voice, anywhere. The agent finds and connects whatever tools the task needs, does the work, and texts you before anything risky.
+Otto is a push-to-talk wearable that lets you hand off real tasks by voice, anywhere. Otto finds and connects whatever tools the task needs, does the work, and texts you before anything risky.
 
 ### 1.2 Problem
 
@@ -113,6 +114,12 @@ Voice assistants answer questions but cannot get work done across your real tool
 - **Conversation layer.** OpenAI Realtime, audio to audio, transcription enabled. Handles the spoken turn with low latency. It has four function tools (7.4), mainly `run_task`. It never touches Composio.
 - **Task layer.** A text LLM (OpenAI, Responses API) running a tool loop. Tools come from Composio. Slower, does the real work, runs asynchronously from the voice turn.
 
+**Two background workers and one extra consumer (new in 1.1).**
+
+- **Action Item Extractor** (Section 6.9). After every voice turn is persisted, a cheap OpenAI model scans the transcript for commitments the user made and writes ActionItems. The Home tab shows them; one tap turns an item into a normal Task through the same `run_task` path, so the approval gate still applies. Never on the voice path.
+- **Context Agent** (Section 6.10). Backs the Chat tab. An OpenAI Responses call with read-only tools over the store (turns, tasks, memories, profile). It can start a task through `run_task` and nothing else. It never calls Composio.
+- Both read the same SQLite file the gateway writes. There is one store.
+
 **Why the Task Agent sits between the LLM and Composio.** Composio can execute tools directly from an agent loop. We do not let it. Every tool call the LLM selects passes through our Approval Gate (AP-1) before `composio.tools.execute()` runs. This is what makes SMS approval impossible to bypass and gives the app a complete step log. It is also the "decision-making under uncertainty" story for judges.
 
 **Latency posture.** The voice path has exactly one network hop that is not OpenAI: device to server. No memory retrieval, no search, no database query happens between `ptt_end` and `response.create`. User profile context is baked into session instructions at session start (VG-10). This is why Elastic was cut (D-12).
@@ -154,6 +161,8 @@ Voice assistants answer questions but cannot get work done across your real tool
 │   │       ├── agent/         <- task agent loop (AG-*)
 │   │       ├── composio/      <- discovery, connect, execute wrappers (CMP-*)
 │   │       ├── approvals/     <- risk gate + SMS state machine (AP-*)
+│   │       ├── extract/       <- action item extraction worker (ACT-*)
+│   │       ├── chat/          <- context agent for the Chat tab (CHAT-*)
 │   │       ├── api/           <- REST + SSE (7.2)
 │   │       └── store/         <- schema + queries (DATA-*)
 │   └── mobile/                <- Expo app (APP-*)
@@ -176,6 +185,8 @@ REALTIME_MODEL               # default gpt-realtime
 REALTIME_VOICE               # e.g. marin
 TRANSCRIBE_MODEL             # default gpt-4o-transcribe
 AGENT_MODEL                  # Responses API model for the task agent
+EXTRACT_MODEL                # cheapest model that returns clean JSON (gpt-4.1-nano class), ACT-1
+CHAT_MODEL                   # model for the Chat tab context agent, CHAT-1
 
 COMPOSIO_API_KEY
 COMPOSIO_USER_ID             # default demo-user
@@ -258,6 +269,7 @@ Verify event names against current Realtime docs before coding. Names changed be
 | AG-8 | P1 | Memory: inject user profile and the three most relevant past task summaries (DATA-4) into the agent system prompt. Agent path only, never the voice path. |
 | AG-9 | P0 | **Messy data handling.** When tool results conflict or are incomplete (two contacts named Sam, ambiguous timezone, missing email, a transcript that mangled a proper noun), the agent states the ambiguity and either resolves it from profile context or asks (AG-6). It never guesses silently on an R1 or R2 action. Promoted to P0 because it is the S1 demo beat and the Rox rubric. |
 | AG-10 | P2 | Detect follow-up action items from a conversation and draft them for approval. |
+| AG-12 | P0 | `run_task` is the single entry point for creating a Task, whether the caller is the Realtime function tool (VG-6), an approved ActionItem (ACT-3), or the Chat tab (CHAT-4). All three set `source` on the Task. No other code path creates a Task. |
 | AG-11 | P0 | Every task ends in exactly one of `succeeded`, `failed`, `cancelled`. `failed` always carries a one-line `error` and a spoken summary ("I couldn't finish that because..."). The device never goes silent (NF-2). |
 
 ### 6.4 Composio integration (CMP)
@@ -269,7 +281,7 @@ Replaces the former MCP-1 to MCP-5 (D-10). Composio provides three things and we
 | CMP-1 | P0 | **Discovery.** `composio/discover.ts`: given a task goal, search Composio's catalog and return tool definitions in OpenAI function-calling shape for the chosen toolkits. Use the OpenAI provider from Composio so no schema translation is hand-written. Log which toolkits matched and the top three candidates that were not chosen. |
 | CMP-2 | P0 | **Managed auth.** No per-integration tokens in env. Connected accounts live in Composio, scoped to `COMPOSIO_USER_ID`. Pre-connect Google Calendar and Shopify before the demo via the Composio dashboard or a one-off script. |
 | CMP-3 | P0 | **Execution.** `composio/execute.ts` exposes `executeTool(slug, args)` which calls Composio execution for the user, with 30 s timeout, one retry, and structured errors. **Only `approvals/gate.ts` imports this file.** |
-| CMP-4 | P0 | **Connect Link flow.** When execution returns a needs-authentication result, do not fail the task. Create a ConnectionRequest (7.3), set task status `awaiting_connection`, send the Connect Link by SMS ("[App] needs access to Gmail. Tap to connect: <link>") and surface it in the app. When the user completes it, retry the exact same tool call once, then continue. This is demo scenario S0. |
+| CMP-4 | P0 | **Connect Link flow.** When execution returns a needs-authentication result, do not fail the task. Create a ConnectionRequest (7.3), set task status `awaiting_connection`, send the Connect Link by SMS ("Otto needs access to Gmail. Tap to connect: <link>") and surface it in the app. When the user completes it, retry the exact same tool call once, then continue. This is demo scenario S0. |
 | CMP-5 | P0 | **Risk tiering of Composio tools.** Tier is derived from the tool slug by rule (7.6), with an argument-level override that can raise but never lower. Unknown tools default to R2. Replaces MCP-5. |
 | CMP-6 | P1 | Extensions screen data: list Composio toolkits with connection status for the user (connected / needs_auth / suggested) so APP-4 has real data. |
 | CMP-7 | P1 | Cache discovery results per goal string for the session so repeated demo runs do not pay the search cost twice. |
@@ -286,26 +298,53 @@ Replaces the former MCP-1 to MCP-5 (D-10). Composio provides three things and we
 | AP-3 | P0 | R2 flow: create Approval (`pending`), send SMS with plain-language summary, key facts (what, to whom, how much), and a 4-digit code: `Reply YES 4821 to approve or NO 4821 to cancel`. Task status `awaiting_approval`. Device speaks "I've texted you to confirm." |
 | AP-4 | P0 | Inbound SMS webhook matches code, sets `approved` or `denied`, resumes or cancels the task. Expire after 5 minutes as denied. |
 | AP-5 | P0 | An approved action executes exactly once with exactly the arguments shown to the user (`args_hash`). Changed arguments require a new approval. |
-| AP-6 | P0 | The app can approve or deny (APP-3). Fallback if SMS delivery fails on stage. |
+| AP-6 | P0 | The app can also approve or deny (APP-1, Home tab "Needs you" section). This is the **primary** confirmation surface when SMS is not configured, and the fallback when SMS delivery fails on stage. |
 | AP-7 | P1 | Verify inbound sender matches `SMS_USER_PHONE`; validate provider webhook signature. |
 | AP-8 | P0 | ConnectionRequests (CMP-4) use the same SMS channel and the same app card as Approvals. One interaction model: the phone buzzes when the agent needs you, for one of two reasons. |
 
 ### 6.6 Mobile app (APP)
 
-Expo, iOS target, single user, `APP_API_KEY`.
+Expo, iOS target, single user, `APP_API_KEY`. **Four tabs: Home, Context, Connections, Chat.** Task detail is a pushed screen reachable from Home and from Chat citations. The old Activity feed lives on Home.
+
+**Home tab**
 
 | ID | Pri | Requirement |
 |---|---|---|
-| APP-1 | P0 | **Activity.** Reverse-chronological task feed: status chip, spoken summary, timestamp. Live over SSE. |
-| APP-2 | P0 | **Task detail.** Original transcript, each step (tool, toolkit, args summary, result summary, duration), approval and connection state, final detail markdown. The discovery `plan` step (AG-7) renders as "Chose Google Calendar and Gmail from 1,500 apps" with the reason. |
-| APP-3 | P0 | **Approvals.** Pending approvals pinned to the top of Activity with Approve / Deny and the same facts as the SMS. |
-| APP-4 | P0 | **Extensions.** Toolkits from CMP-6 with status (connected, needs auth, suggested) and a Connect button that opens the Connect Link. |
-| APP-5 | P1 | **Device.** Connected or not, last seen, current state (idle, listening, thinking, speaking), battery if reported. |
-| APP-6 | P1 | **Context.** View and edit profile, list memories, delete individual memories. |
-| APP-7 | P0 | **Connection requests.** Pending ConnectionRequests render as a card with an Open Link button, next to approvals. Demo beat S0. |
-| APP-8 | P2 | Push notifications for approvals and completions. |
-| APP-9 | P1 | Text input to start a task from the app. Also the fastest way to test the agent without audio. |
-| APP-10 | P0 | **Native feel.** Expo Router for navigation. Use Expo UI native components for lists and sheets where they exist. Haptic on approve/deny. No web-styled buttons. The Expo rubric is "beautiful, feels truly native, a joy to use"; treat this as a P0 for the two frontend owners, not polish. |
+| APP-1 | P0 | **"Needs you" section**, pinned at the top. Pending Approvals (same facts as the SMS, Approve / Deny with haptic) and pending ConnectionRequests (Open Link). When `SMS_PROVIDER` is unset or a send fails, this is the only confirmation surface, and the device says "check the app to confirm" instead of "I've texted you." Empty state: "Nothing needs you." |
+| APP-3 | P0 | **Action items section.** Each open ActionItem (6.9) as a card: title, the suggested action in plain words ("Schedule via Google Calendar"), a confidence pill, and a one-line snippet of what was said. Two buttons: **Do it** (POST approve, card flips to the new Task with a live status chip) and **Dismiss**. |
+| APP-13 | P0 | **Recent activity** below action items: reverse-chronological Task feed with status chip, spoken summary, timestamp. Live over SSE. Tapping opens Task detail (APP-2). |
+| APP-14 | P1 | Tab badge = pending approvals + pending connections + open action items. Clears as they are handled. |
+| APP-2 | P0 | **Task detail** (pushed screen). Original transcript, each step (tool, toolkit, args summary, result summary, duration), approval and connection state, final detail markdown, and `source` (voice, action item, chat). The discovery `plan` step (AG-7) renders as "Chose Google Calendar and Gmail from 1,500 apps" with the reason. |
+| APP-7 | P0 | ConnectionRequests render in "Needs you" (APP-1) as a card with Open Link. Demo beat S0. On return from the link, the card resolves itself via SSE. |
+
+**Context tab** (two sub-tabs)
+
+| ID | Pri | Requirement |
+|---|---|---|
+| APP-6 | P0 | **Transcript sub-tab.** Every Turn, word for word, exactly as Realtime transcribed it: user text and Otto's reply, reverse-chronological, grouped by day, with chips linking to any Task the turn started. This is the "everything Otto heard" view; do not summarise or clean it. Search by keyword is P1. |
+| APP-11 | P0 | **Add context sub-tab.** Free-text notes the user gives Otto ("Sam Chen is my manager", "I prefer morning meetings", "my usual order is..."). List, add, delete. Stored as Memories with `source: "user"` (DATA-4) and injected into the task agent (AG-8), the context agent (CHAT-1), and the Realtime instructions on next session (VG-10). |
+
+**Connections tab**
+
+| ID | Pri | Requirement |
+|---|---|---|
+| APP-4 | P0 | **Connected tools.** Every Composio toolkit visible to this user (CMP-6): name, icon, status (connected / needs auth / suggested), tool count. **Connect** opens the Connect Link from `POST /api/extensions/:id/connect`. Pull to refresh. Toolkits Otto used recently sort to the top. |
+| APP-5 | P1 | **Settings section** at the bottom: device (connected, last seen, state, battery), SMS number, server URL, `DEMO_MODE` indicator, and a Disconnect action per toolkit. |
+
+**Chat tab**
+
+| ID | Pri | Requirement |
+|---|---|---|
+| APP-12 | P0 | **Talk to Otto by text.** A single thread with the context agent (6.10). Streaming replies. Three suggested prompts on empty state: "What did I do today?", "What did I commit to this week?", "What's still open?". Citations render as tappable chips that open Task detail or scroll the Transcript sub-tab to that turn (CHAT-5). |
+| ~~APP-9~~ | | ~~Text input to start a task from the app~~ `[REMOVED]` superseded by CHAT-4: ask Otto in the Chat tab and it starts the task. |
+
+**Cross-cutting**
+
+| ID | Pri | Requirement |
+|---|---|---|
+| APP-8 | P2 | Push notifications for approvals, connection requests, and new action items. |
+| APP-10 | P0 | **Native feel.** Expo Router with a native tab bar. Expo UI native components for lists, sheets, and segmented controls where they exist. Haptics on Approve / Deny / Do it. No web-styled buttons. The Expo rubric is "beautiful, feels truly native, a joy to use"; this is a P0 for the two frontend owners, not polish. The "Needs you" card is the screen judges will see most; make it the best screen in the app. |
+| APP-15 | P0 | The Home tab loads from one call, `GET /api/home`, so the first paint is fast on venue Wi-Fi. Everything after that arrives over SSE. |
 
 ### 6.7 Data and memory (DATA)
 
@@ -314,7 +353,9 @@ Expo, iOS target, single user, `APP_API_KEY`.
 | DATA-1 | P0 | Persist every voice turn: user transcript, assistant transcript, timestamps, linked task IDs. Raw audio is not stored. |
 | DATA-2 | P0 | Persist Task, TaskStep, Approval, ConnectionRequest, Turn per 7.3. |
 | DATA-3 | P0 | Secrets never appear in TaskStep or SSE payloads. Redact argument fields named like `token`, `key`, `password`, `authorization`, `secret`. |
-| DATA-4 | P1 | Memory: a profile document (name, timezone, role, frequent contacts, preferences) plus a one-line summary per completed task. Retrieval is recency plus SQLite `LIKE` on keywords. Sub-5 ms. Enough for a hackathon. |
+| DATA-4 | P0 | Memory: a profile document (name, timezone, role, frequent contacts, preferences) plus Memories with `source: "user"` (notes from APP-11) or `source: "task_summary"` (one line written when a task completes). Retrieval is recency plus SQLite `LIKE` on keywords. Sub-5 ms. Promoted to P0 because the Context tab writes to it. |
+| DATA-6 | P0 | Persist ActionItem (7.3) with a link to the source Turn and, once approved, the Task. |
+| DATA-7 | P0 | Persist ChatMessage (7.3). One thread. |
 | ~~DATA-5~~ | | ~~Elasticsearch hybrid search over transcripts and tasks~~ `[CUT]` D-12. |
 
 ### 6.8 Developer experience and Codex evidence (DEVX)
@@ -327,6 +368,57 @@ The OpenAI track asks for Codex as a development teammate and evidence of how it
 | DEVX-2 | P0 | At least four substantive Codex-authored changes land as separate PRs or clearly attributed commits (`codex:` prefix or PR label). Candidates in 11.1. |
 | DEVX-3 | P0 | Before the Devpost is written, collect: screenshots of Codex cloud tasks or CLI sessions, PR links, and a two-line note per use case on what it did and what you would have skipped without it. Store in `docs/codex-evidence.md`. |
 | DEVX-4 | P1 | One Codex code review pass on `apps/server/src/gateway` before freeze, with findings logged. |
+
+### 6.9 Action item extraction (ACT)
+
+A cheap OpenAI model reads every transcript and picks out things the user said they would do. The user approves with one tap. Approval creates a normal Task, so nothing here can bypass the gate.
+
+| ID | Pri | Requirement |
+|---|---|---|
+| ACT-1 | P0 | After each Turn is persisted (DATA-1), run one extraction call asynchronously with `EXTRACT_MODEL`. Input: this turn's user and assistant text plus the previous two turns for context. Output: strict JSON `{ "items": [ { "title", "suggested_goal", "toolkit_hint", "confidence" } ] }`, no prose. Never on the voice path; never blocks the next turn. |
+| ACT-2 | P0 | Persist only items with `confidence >= 0.6` (proposed). Skip an item if the same turn already fired `run_task` with a matching goal (the user asked Otto to do it, so it is a Task, not a suggestion). Dedupe against open ActionItems by lowercase token overlap over 0.7. |
+| ACT-3 | P0 | Statuses: `open`, `approved`, `dismissed`, `done`. **Approve** creates a Task through `run_task` (AG-12) with `goal = suggested_goal` and `source: "action_item"`, stores `task_id`, sets `approved`; when that task succeeds the item becomes `done`. **Dismiss** sets `dismissed` and the item is never re-extracted for that turn. |
+| ACT-4 | P0 | Emit SSE `action_item.created` and `action_item.updated`. |
+| ACT-5 | P1 | Otto mentions new items at the next idle moment through VG-7 ("You said you'd set up a meeting at 10. Want me to?"), at most once per 10 minutes, never mid-task. |
+| ACT-6 | P1 | The extraction prompt distinguishes commitments the user made ("I'll", "I need to", "remind me", "let's") from things merely discussed. Only commitments become items. A turn that was itself a `run_task` request yields nothing. |
+| ACT-7 | P0 | Seed three known-good turns into the demo profile so the Home tab is never empty on stage, and so the extraction demo ("schedule a meeting at 10" -> "Schedule via Google Calendar") is deterministic. |
+
+**Extraction prompt (starting point)**
+
+```
+You extract action items from a wearable assistant's transcript.
+Return only JSON: {"items":[{"title":"","suggested_goal":"","toolkit_hint":"","confidence":0.0}]}
+An action item is something the USER committed to do or asked to have done, not something merely mentioned.
+"title" is under 8 words. "suggested_goal" is the instruction you would give an agent to do it.
+"toolkit_hint" is the most likely app (googlecalendar, gmail, shopify, ...) or empty.
+"confidence" is 0 to 1. If nothing qualifies return {"items":[]}.
+```
+
+### 6.10 Context agent for the Chat tab (CHAT)
+
+A text agent that knows everything Otto heard and did. Read-mostly. Its only write is starting a task, through the same path as everything else.
+
+| ID | Pri | Requirement |
+|---|---|---|
+| CHAT-1 | P0 | `POST /api/chat` with `{ text }` streams a reply (SSE `chat.delta` events, then `chat.done`) from `CHAT_MODEL` via the Responses API. System prompt: "You are Otto..." plus the profile and all `source: "user"` memories. |
+| CHAT-2 | P0 | Read tools exposed as functions: `search_turns(query, from?, to?)`, `list_tasks(status?, limit?)`, `get_task(id)`, `list_action_items(status?)`, `list_memories()`, `get_profile()`. Each is a SQLite query. Max 6 tool calls per message. |
+| CHAT-3 | P0 | Persist ChatMessage for both roles (DATA-7). Send the last 20 messages as context. One thread; no thread management. |
+| CHAT-4 | P1 | Write tool: `run_task(goal)` through AG-12 with `source: "chat"`. Otto replies "on it" and the Task appears on Home. This replaces APP-9. |
+| CHAT-5 | P1 | Replies cite sources as `{kind: "turn"|"task", id}` in the ChatMessage; the app renders them as chips (APP-12). |
+| CHAT-6 | P0 | The chat agent has no access to Composio. Its only side effect is `run_task`. AG-3 holds. |
+| CHAT-7 | P1 | Streaming first token under 800 ms on the demo network; if the model is slower, show a typing indicator immediately on send. |
+
+**Chat system prompt (starting point)**
+
+```
+You are Otto, a wearable assistant. The user is chatting with you by text about their day.
+You have tools to look up what the user said (turns), what you did for them (tasks),
+open action items, saved memories, and their profile. Look things up before answering;
+do not guess about the user's day. Be brief and specific. When you reference something
+you found, include its id so the app can link to it. If the user asks you to do
+something, call run_task and say you are on it.
+User profile: {profile}. Notes the user gave you: {user_memories}.
+```
 
 ---
 
@@ -371,23 +463,48 @@ Rules: server may send `speak_start` at any time while the device is idle (VG-7)
 All requests carry `Authorization: Bearer <APP_API_KEY>`.
 
 ```
+# Home
+GET    /api/home                             -> { approvals, connections, action_items, recent_tasks }   (APP-15)
+
+# Tasks
 GET    /api/tasks?limit&before               -> Task[]
 GET    /api/tasks/:id                        -> Task & { steps, approval?, connection_request? }
-POST   /api/tasks                            -> { goal }                     (APP-9)
+
+# Approvals and connections
 GET    /api/approvals?status=pending         -> Approval[]
 POST   /api/approvals/:id/decision           -> { decision: "approve"|"deny" }
 GET    /api/connections?status=pending       -> ConnectionRequest[]
 POST   /api/connections/:id/completed        -> { }                          (app calls after link flow returns)
-GET    /api/extensions                       -> Extension[]                  (CMP-6)
-GET    /api/device                           -> { connected, state, last_seen, battery? }
+
+# Action items (6.9)
+GET    /api/action-items?status=open         -> ActionItem[]
+POST   /api/action-items/:id/approve         -> { task_id }
+POST   /api/action-items/:id/dismiss         -> { }
+
+# Context tab
+GET    /api/turns?limit&before&q             -> Turn[]                       (APP-6; q is P1)
+GET    /api/memories?source=user             -> Memory[]                     (APP-11)
+POST   /api/memories                         -> { text } -> Memory           (APP-11, source forced to "user")
+DELETE /api/memories/:id
 GET    /api/profile        PUT /api/profile
-GET    /api/memories       DELETE /api/memories/:id
+
+# Connections tab
+GET    /api/extensions                       -> Extension[]                  (CMP-6)
+POST   /api/extensions/:id/connect           -> { link }                     (APP-4)
+POST   /api/extensions/:id/disconnect        -> { }                          (APP-5, P1)
+GET    /api/device                           -> { connected, state, last_seen, battery? }
+
+# Chat tab (6.10)
+GET    /api/chat/messages?limit              -> ChatMessage[]
+POST   /api/chat                             -> { text }; streams SSE chat.delta ... chat.done
+
+# Streams and webhooks
 GET    /api/events                           -> SSE
 POST   /webhooks/sms                         -> inbound SMS (no bearer; signature check)
 GET    /connect/callback                     -> Composio redirect target; marks ConnectionRequest done, resumes task
 ```
 
-SSE events: `task.created`, `task.updated`, `step.created`, `approval.created`, `approval.updated`, `connection.created`, `connection.updated`, `device.updated`, `extension.updated`. Payload is the full object.
+SSE events on `/api/events`: `task.created`, `task.updated`, `step.created`, `approval.created`, `approval.updated`, `connection.created`, `connection.updated`, `action_item.created`, `action_item.updated`, `memory.created`, `device.updated`, `extension.updated`. Payload is the full object.
 
 ### 7.3 Data model
 
@@ -396,8 +513,10 @@ type TaskStatus =
   | "running" | "needs_input" | "awaiting_approval" | "awaiting_connection"
   | "succeeded" | "failed" | "cancelled";
 
+type TaskSource = "voice" | "action_item" | "chat";
+
 interface Task {
-  id: string; goal: string; status: TaskStatus;
+  id: string; goal: string; status: TaskStatus; source: TaskSource;
   spoken_summary?: string; detail_md?: string; error?: string;
   toolkits_used: string[];                 // e.g. ["googlecalendar", "gmail"]
   created_at: string; updated_at: string;
@@ -437,8 +556,33 @@ interface Extension {                       // a Composio toolkit as seen by thi
 
 interface Turn {
   id: string; user_text: string; assistant_text: string;
-  task_ids: string[]; latency_ms?: number;
+  task_ids: string[]; action_item_ids: string[]; latency_ms?: number;
   started_at: string; ended_at: string;
+}
+
+interface ActionItem {                      // 6.9
+  id: string; turn_id: string;
+  title: string; suggested_goal: string; toolkit_hint?: string; confidence: number;
+  snippet: string;                          // the words that produced it, for the card
+  status: "open" | "approved" | "dismissed" | "done";
+  task_id?: string; created_at: string; decided_at?: string;
+}
+
+interface Memory {                          // DATA-4
+  id: string; text: string;
+  source: "user" | "task_summary";
+  task_id?: string; created_at: string;
+}
+
+interface ChatMessage {                     // 6.10
+  id: string; role: "user" | "assistant"; text: string;
+  citations?: { kind: "turn" | "task"; id: string }[];
+  created_at: string;
+}
+
+interface HomePayload {                     // GET /api/home
+  approvals: Approval[]; connections: ConnectionRequest[];
+  action_items: ActionItem[]; recent_tasks: Task[];
 }
 ```
 
@@ -485,13 +629,15 @@ Sent as `session.update` immediately after the Realtime WS opens. Verify field n
 Instructions template (VG-10):
 
 ```
-You are a wearable assistant. The user talks to you through a button on their chest.
+You are Otto, a wearable assistant. The user talks to you through a button on their chest.
 Reply in one or two short spoken sentences. Never use lists or markdown.
 If the user asks you to do something in the world, call run_task with a clear goal
 and say "On it" or similar. Do not describe what you will do. Do not claim anything
 is done until you are told it is done.
 If something is ambiguous (which Sam, which date), ask one short question.
+If the user asks to confirm something and SMS is off, say "check the app to confirm."
 User profile: {name}, timezone {tz}. Frequent contacts: {contacts}.
+Notes the user gave you: {user_memories}.
 ```
 
 Events the gateway must handle:
@@ -575,13 +721,15 @@ Times are targets from a morning start. If it is later than that, compress from 
 | **Now** | Confirm Friday milestone: hold button, ask a question, hear the answer from the speaker. If not done, nothing else starts until it is. | DEV-1, VG-1 to VG-5, VG-13, FW-1 to FW-6 |
 | **09:00 to 11:00** | Transcription persisted, function tool routing works, `run_task` returns "on it". | VG-6, VG-8, VG-15, AG-1, DATA-1, DATA-2 |
 | **11:00 to 13:00** | Composio wired: discovery returns Calendar tools, execute creates an event through the gate. **S1 passes from fake device.** | CMP-1, CMP-2, CMP-3, CMP-5, CMP-8, AP-1, AP-2, AG-2 to AG-5, AG-7 |
-| **13:00 to 15:00** | SMS approvals end to end. Connect Link flow end to end. **S0 + S1 pass from fake device.** App shows Activity and Task detail against real data. | AP-3 to AP-6, AP-8, CMP-4, APP-1, APP-2, APP-3, APP-7 |
-| **15:00 to 17:00** | **S1 passes from real hardware on the stage network path.** S2 passes from fake device. Extensions screen. | FW-10, VG-14, NF-6, APP-4, CMP-6 |
-| **17:00 to 19:00** | S2 from hardware. S3 per OD-5. Messy-data beat verified (AG-9). Native polish pass (APP-10). | AG-6, AG-9, AG-11, APP-10 |
-| **19:00 to 21:00** | P1 polish only: LED states, memory injection, Codex review. **Record backup videos for S0/S1, S2, S3.** | FW-7, AG-8, DATA-4, DEVX-4 |
+| **13:00 to 15:00** | SMS approvals end to end. Connect Link flow end to end. **S0 + S1 pass from fake device.** Home tab against real data: Needs you, recent activity, Task detail. | AP-3 to AP-6, AP-8, CMP-4, APP-1, APP-2, APP-7, APP-13, APP-15 |
+| **15:00 to 17:00** | **S1 passes from real hardware on the stage network path.** S2 passes from fake device. Action items extracting and approvable from Home. Context tab (transcript + notes). Connections tab. | FW-10, VG-14, NF-6, ACT-1 to ACT-4, ACT-7, AG-12, DATA-4, DATA-6, APP-3, APP-6, APP-11, APP-4, CMP-6 |
+| **17:00 to 19:00** | S2 from hardware. S3 per OD-5. Messy-data beat verified (AG-9). Chat tab streaming with read tools. Native polish pass (APP-10). | AG-6, AG-9, AG-11, CHAT-1 to CHAT-3, CHAT-6, DATA-7, APP-12, APP-10 |
+| **19:00 to 21:00** | P1 polish only: LED states, memory injection, Otto mentions action items, chat can start tasks, citations, settings, badges, Codex review. **Record backup videos for S0/S1, S2, S3, and the Home action-item approve.** | FW-7, AG-8, ACT-5, ACT-6, CHAT-4, CHAT-5, CHAT-7, APP-5, APP-14, DEVX-4 |
 | **21:00 to 23:59** | Full dry runs, twice each, from hardware. Codex evidence collected. Bug fixes only. | DEVX-3, success criteria 1 |
 | **23:59** | **Freeze.** |
 | **Sunday** | Pitch, Devpost, video edit, judge check-ins. No code except a demo-breaking bug. | Section 16 |
+
+**Cut rule for the app.** If S2 has not passed from hardware by 17:30, the Chat tab (CHAT-*, APP-12) drops to P1 and its slot goes to S2. The other three tabs stay P0. A demo with three excellent tabs beats four half-done ones, and the Expo judges will notice the difference.
 
 ---
 
@@ -641,7 +789,7 @@ Every model call in the system is OpenAI. Say that in the pitch.
 
 **Rubric:** beautiful, feels truly native, a joy to use. Expo Router, Expo UI, widgets, Live Activities are all fair game.
 
-**How we satisfy it:** APP-10 is P0. Expo Router for navigation, Expo UI native components where they exist, haptics on decisions. The approval card is the screen judges will see most; make it the best screen in the app. Stretch: a Live Activity showing the current task (APP-8 territory, P2).
+**How we satisfy it:** APP-10 is P0. Four native tabs (Home, Context, Connections, Chat) on Expo Router, Expo UI components where they exist, haptics on every decision. The "Needs you" card on Home is the screen judges will see most; make it the best screen in the app. The Chat tab's streaming thread is the second. Stretch: a Live Activity showing the current task (APP-8 territory, P2).
 
 Feed `docs.expo.dev/llms.txt` to the coding agent before starting the app.
 
@@ -682,6 +830,11 @@ See D-12. The honest reason: it would not make the hack easier and it would not 
 | **D-15** | Sep 19 | **JSON control protocol (7.1) is canonical; legacy keyword frames are accepted as aliases (VG-14).** | Firmware may already speak the keyword form. Do not rewrite working firmware on Saturday. The server absorbs the difference in one function. |
 | **D-16** | Sep 19 | **S0 (connect a tool live) is folded into S1 as its opening 20 seconds and Gmail is deliberately left unconnected.** | The live Connect Link is the strongest single beat available and the Composio track's whole thesis. Pre-connecting it would remove the demo. |
 | **D-17** | Sep 19 | AG-7 (agent finds its own tools) and AG-9 (messy data handling) promoted from P1 to P0. | Composio makes AG-7 nearly free. AG-9 is the S1 demo beat and the Rox rubric. |
+| **D-18** | Sep 19 | **Project is named Otto.** Resolves OD-7. | Used in the Realtime instructions, the chat prompt, the app, and the pitch. One name for device, agent, and app. |
+| **D-19** | Sep 19 | **App is four tabs: Home, Context, Connections, Chat.** Activity feed folds into Home; Task detail is a pushed screen. | Matches the team's UI plan. Fewer top-level surfaces, each with one job. |
+| **D-20** | Sep 19 | **Action items are extracted per turn by the cheapest OpenAI model that returns clean JSON, off the voice path, and approved with one tap. Approval creates a normal Task.** | The Home tab needs something to show that the device is paying attention between commands. Routing approval through `run_task` means the risk gate and step log apply unchanged (AG-12). |
+| **D-21** | Sep 19 | **The Chat tab is a read-mostly context agent. Its only write is `run_task`.** | Talking to Otto about your day is a memory feature, not an action feature. Keeping Composio out of it preserves AG-3 and keeps the chat fast. |
+| **D-22** | Sep 19 | **When SMS is off or fails, the Home tab is the confirmation surface and Otto says so aloud.** | The demo works with or without a working SMS number. One code path decides which sentence Otto speaks. |
 
 ---
 
@@ -691,9 +844,8 @@ See D-12. The honest reason: it would not make the hack easier and it would not 
 |---|---|---|---|
 | OD-2 | SMS provider: Twilio or Linq? | Try Linq (sponsor) for 45 minutes. If inbound webhooks are not working, Twilio. Provision the number **now**; verification can take hours. | Sat noon |
 | OD-5 | How does S3 execute? | Check Composio's catalog for a food-delivery toolkit first. Then (a) browser toolkit, (b) supported alternative service, (c) mock custom tool labelled as demo. | Sat noon |
-| OD-7 | Project name | | Before Devpost |
 | OD-9 | Hosting: laptop + cloudflared, or Railway? | cloudflared. Zero deploy step, and the laptop is on stage anyway. Have the Railway config ready as a fallback if the tunnel is flaky on the venue uplink. | Sat 15:00 (NF-6) |
-| ~~OD-1, OD-3, OD-4, OD-6, OD-8~~ | | Resolved: D-10, D-14, D-13, Section 11, D-11. | |
+| ~~OD-1, OD-3, OD-4, OD-6, OD-7, OD-8~~ | | Resolved: D-10, D-14, D-13, Section 11, D-18, D-11. | |
 
 ---
 
@@ -705,6 +857,7 @@ See D-12. The honest reason: it would not make the hack easier and it would not 
 | Voice Gateway (VG) | Vibhor | Ayaan |
 | Task Agent + Composio (AG, CMP) | Alison | Vibhor |
 | Approvals + SMS (AP) | Alison | frontend 2 |
+| Action items + Context agent (ACT, CHAT) | Vibhor, after VG P0s pass | Alison |
 | Mobile app (APP) | frontend 1, frontend 2 | |
 | Demo script, rehearsals, judge check-ins | Alison from Sat morning; everyone after freeze | |
 | Codex evidence (DEVX) | whoever lands each PR; Alison collates | |
@@ -733,6 +886,9 @@ Judge check-ins: OpenAI, Composio, and Expo booths early Saturday and again mid-
 | Realtime event names differ from this spec | Medium | Verify against current docs before coding VG; 7.5 is the last-known shape |
 | Scope creep Saturday evening | High | Priority rule in Section 0; freeze in D-4; Section 9 slots |
 | Two Sams beat feels contrived | Low | It is the same ambiguity every real contact list has; say so in one sentence |
+| Action item extraction produces junk on stage | Medium | Confidence threshold (ACT-2), commitment-only rule (ACT-6), seeded turns (ACT-7). Rehearse the exact sentence that produces the meeting item. |
+| Chat tab is half-built at freeze | Medium | Cut rule in Section 9. A hidden tab is better than a broken one. |
+| Four tabs dilute the frontend owners | Medium | Home first, then Context, then Connections, then Chat. Each tab ships complete before the next starts. |
 
 ---
 
@@ -744,7 +900,9 @@ Judge check-ins: OpenAI, Composio, and Expo booths early Saturday and again mid-
 2. S2 from your own chest: Shopify price change with SMS approval, refresh the storefront. (30 s)
 3. S3 if it passed twice in rehearsal. Otherwise the S3 backup video. (30 s)
 
-**The one sentence:** "Everyone's building AI that listens. We built one that does something about it."
+**The one sentence:** "Everyone's building AI that listens. Otto does something about it."
+
+**Home tab beat (add after S1 if time allows, 15 s):** open the app, show an action item Otto picked up from something you said earlier without being asked ("Schedule a meeting at 10, via Google Calendar"), tap Do it, watch the Task appear. This is the "it was paying attention" moment.
 
 **Per-track opener:**
 - OpenAI: "Every model call is OpenAI. Realtime for the ear, Responses for the hands, and Codex built about a third of the repo."
@@ -754,7 +912,7 @@ Judge check-ins: OpenAI, Composio, and Expo booths early Saturday and again mid-
 - Finalists: "We were annoyed that thoughts die in hallways. So we made a button."
 
 **Devpost checklist (Sunday morning):**
-- [ ] Name (OD-7), one-liner, 3 screenshots (app activity, approval card, device on a person)
+- [ ] Otto: one-liner, 3 screenshots (Home with an action item, the Needs you card, device on a person)
 - [ ] 60 to 90 s video: the three beats, no slides, captions for what the SMS says
 - [ ] Architecture diagram from Section 3
 - [ ] "How we built it": two-layer brain, why approvals sit before Composio, why push-to-talk
@@ -762,11 +920,12 @@ Judge check-ins: OpenAI, Composio, and Expo booths early Saturday and again mid-
 - [ ] Tracks entered: OpenAI, Composio, Expo, Rox, Shopify, Finalists
 - [ ] Honest "what's mocked" line if S3 uses the mock tool
 
-**Answer prepared for the privacy question:** "It only hears you when you press the button. Nothing is stored until you decide it matters. And it asks before it acts."
+**Answer prepared for the privacy question:** "Otto only hears you when you press the button. Every word it heard is in the Context tab, and you can delete any of it. And it asks before it acts."
 
 ---
 
 ## 17. Changelog
 
+- **1.1.0** (Sep 19): Named Otto (D-18). App restructured into four tabs, Home / Context / Connections / Chat (D-19, APP-* rewritten, APP-11 to APP-15 added, APP-9 removed). Action item extraction worker (6.9, ACT-1 to ACT-7, D-20). Context agent for the Chat tab (6.10, CHAT-1 to CHAT-7, D-21). `run_task` as the single Task entry point with `source` (AG-12). Home as the confirmation surface when SMS is off (D-22, AP-6, VG-10). New endpoints for home, turns, action items, memories, extension connect, chat (7.2). ActionItem, Memory, ChatMessage, HomePayload, TaskSource added (7.3). DATA-4 to P0, DATA-6 and DATA-7 added. Build order and cut rule updated. Ownership, risks, and pitch updated.
 - **1.0.0** (Sep 19): Final build spec. Composio replaces the MCP layer (D-10, D-11, CMP-*). Elastic cut (D-12). Cohere removed (D-13). Task agent on OpenAI Responses (D-14). Legacy device protocol accepted as aliases (D-15, VG-14, FW-10). S0 live-connect beat added (D-16, CMP-4, AP-8, APP-7). AG-7 and AG-9 promoted to P0 (D-17). Realtime session config and transcription pinned in 7.5. Risk rules for Composio slugs in 7.6. Codex evidence requirements added (DEVX-*). Saturday build order rewritten by slot. Session cleanup and cost controls added (VG-13, NF-7). Tracks section added (11).
 - **0.1.0** (Sep 18): Initial spec.
