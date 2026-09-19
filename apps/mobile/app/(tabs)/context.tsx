@@ -356,9 +356,6 @@ export default function ContextScreen() {
                 {error}
               </Copy>
             )}
-            <Copy style={{ color: c.muted, fontSize: 14, marginTop: 16 }}>
-              Otto uses these notes when you ask a question.
-            </Copy>
           </View>
         )}
       </ScrollView>

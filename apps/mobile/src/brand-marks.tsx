@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { View } from "react-native";
 import { Image } from "expo-image";
 import { Feather } from "@expo/vector-icons";
@@ -15,24 +15,63 @@ const marks: Record<string, number> = {
   slack: require("../assets/brands/slack.svg"),
   github: require("../assets/brands/github.svg"),
 };
-export function BrandMark({ id, size = 38 }: { id: string; size?: number }) {
+// Only pass logos supplied by trusted toolkit/publisher metadata. Do not infer
+// artwork from a company name, a favicon, or an arbitrary MCP server URL.
+export function validatedLogoUrl(input?: string): string | undefined {
+  if (!input) return undefined;
+  try {
+    const url = new URL(input);
+    if (
+      url.protocol !== "https:" ||
+      !url.hostname ||
+      url.username ||
+      url.password
+    )
+      return undefined;
+    return url.toString();
+  } catch {
+    return undefined;
+  }
+}
+
+export function BrandMark({
+  id,
+  size = 38,
+  logoUrl,
+}: {
+  id: string;
+  size?: number;
+  logoUrl?: string;
+}) {
   const key = id.toLowerCase().replace(/[ _-]/g, "");
   const asset = marks[key === "calendar" ? "googlecalendar" : key];
+  const uri = validatedLogoUrl(logoUrl);
+  const [failedRemote, setFailedRemote] = useState<string>();
+  const [failedAsset, setFailedAsset] = useState<number>();
+  const remote = uri && uri !== failedRemote ? uri : undefined;
+  const bundled = asset && asset !== failedAsset ? asset : undefined;
+  const source = remote ? { uri: remote } : bundled;
   return (
     <View
       style={{
         width: size,
         height: size,
         borderRadius: size * 0.26,
-        backgroundColor: asset ? "#F5F5F2" : c.raised,
+        backgroundColor: source ? "#F5F5F2" : c.raised,
         alignItems: "center",
         justifyContent: "center",
       }}
     >
-      {asset ? (
+      {source ? (
         <Image
           accessibilityLabel={id + " logo"}
-          source={asset}
+          source={source}
+          cachePolicy="memory-disk"
+          recyclingKey={remote ?? String(bundled)}
+          onError={() => {
+            if (remote) setFailedRemote(remote);
+            else setFailedAsset(bundled);
+          }}
           contentFit="contain"
           style={{ width: size * 0.68, height: size * 0.68 }}
         />

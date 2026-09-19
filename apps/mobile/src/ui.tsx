@@ -206,8 +206,20 @@ export function NetworkBanner() {
     </View>
   );
 }
-export function ToolMark({ id, size = 38 }: { id: string; size?: number }) {
-  return <BrandMark id={id} size={size} />;
+export function ToolMark({
+  id,
+  size = 38,
+  logoUrl,
+}: {
+  id: string;
+  size?: number;
+  logoUrl?: string;
+}) {
+  const { extensions } = useOtto();
+  const extension = extensions.find((tool) => tool.id === id);
+  return (
+    <BrandMark id={id} size={size} logoUrl={logoUrl ?? extension?.logoUrl} />
+  );
 }
 export const s = StyleSheet.create({
   copy: { fontFamily: fonts.body, fontSize: 16, lineHeight: 23, color: c.text },

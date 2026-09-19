@@ -30,7 +30,7 @@ import {
   useOtto,
 } from "../../src/ui";
 import { GlassChrome } from "../../src/glass";
-import { SignalScene } from "../../src/visuals/SignalScene";
+import { ConversationScene } from "../../src/visuals/ConversationScene";
 import { colors as c, fonts } from "../../src/theme";
 import { otto } from "../../src/data/mock";
 
@@ -281,7 +281,7 @@ export default function ChatScreen() {
         >
           {state.messages.length === 0 && (
             <View>
-              <SignalScene compact active={keyboardVisible} />
+              <ConversationScene active={keyboardVisible} />
               <View style={styles.starters}>
                 {starters.map((text, i) => (
                   <Reveal key={text} delay={i * 45}>

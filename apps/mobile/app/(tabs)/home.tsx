@@ -30,6 +30,7 @@ import {
   useOtto,
   s,
 } from "../../src/ui";
+import { DevicesTile } from "../../src/devices";
 import { SignalScene } from "../../src/visuals/SignalScene";
 import { otto } from "../../src/data/mock";
 import type { HomePayload } from "../../src/data/types";
@@ -125,7 +126,6 @@ export default function Home() {
             </Display>
           </View>
           <View style={h.heroBottom}>
-            <Copy style={{ color: c.muted }}>Otto · Device concept</Copy>
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Ask Otto"
@@ -137,27 +137,32 @@ export default function Home() {
           </View>
         </View>
         <View style={h.summary}>
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => router.push("/(tabs)/tasks")}
-            style={{ flex: 1, gap: 6 }}
-          >
-            <Display style={{ fontSize: 38 }}>
-              {days[6].completed.length}
-            </Display>
-            <Copy style={{ color: c.muted }}>Handled today</Copy>
-          </Pressable>
-          <View style={{ width: 1, backgroundColor: c.line }} />
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => router.push("/(tabs)/tasks")}
-            style={{ flex: 1, gap: 6, paddingLeft: 24 }}
-          >
-            <Display style={{ fontSize: 38, color: c.accent }}>
-              {active.length}
-            </Display>
-            <Copy style={{ color: c.muted }}>In motion</Copy>
-          </Pressable>
+          <View style={{ flex: 1, gap: 12, justifyContent: "center" }}>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => router.push("/(tabs)/tasks")}
+              style={{ gap: 2, minHeight: 76, justifyContent: "center" }}
+            >
+              <Display style={{ fontSize: 34 }}>
+                {days[6].completed.length}
+              </Display>
+              <Copy style={{ color: c.muted }}>Handled today</Copy>
+            </Pressable>
+            <View
+              style={{ height: 1, backgroundColor: c.line, marginRight: 24 }}
+            />
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => router.push("/(tabs)/tasks")}
+              style={{ gap: 2, minHeight: 76, justifyContent: "center" }}
+            >
+              <Display style={{ fontSize: 34, color: c.accent }}>
+                {active.length}
+              </Display>
+              <Copy style={{ color: c.muted }}>In motion</Copy>
+            </Pressable>
+          </View>
+          <DevicesTile />
         </View>
         <Section title="Urgent" aside={urgent ? String(urgent) : undefined} />
         <Reveal
@@ -169,9 +174,6 @@ export default function Home() {
               size={26}
               color={urgent ? c.onAccent : c.accent}
             />
-            <Copy style={{ color: urgent ? c.onAccent : c.muted, flex: 1 }}>
-              {urgent ? "Your next move" : "All clear"}
-            </Copy>
           </View>
           <Display
             style={{
@@ -212,7 +214,6 @@ export default function Home() {
           <Feather name="message-square" size={22} color={c.accent} />
           <View style={{ flex: 1 }}>
             <Copy style={{ fontWeight: "600" }}>Approval texts</Copy>
-            <Copy style={{ color: c.muted }}>Demo channel</Copy>
           </View>
           <Feather name="chevron-right" size={20} color={c.muted} />
         </Pressable>
@@ -344,7 +345,7 @@ const h = StyleSheet.create({
     right: 0,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
+    justifyContent: "flex-end",
   },
   arrow: {
     width: 50,
@@ -356,6 +357,7 @@ const h = StyleSheet.create({
   },
   summary: {
     flexDirection: "row",
+    gap: 16,
     paddingVertical: 24,
     marginTop: 8,
     borderBottomWidth: 1,

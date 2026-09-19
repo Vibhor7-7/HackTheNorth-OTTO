@@ -106,9 +106,6 @@ export default function ProfileScreen() {
               <Feather name="shield" color={c.warning} size={22} />
               <View style={{ flex: 1 }}>
                 <Copy style={{ fontWeight: "600" }}>Urgent</Copy>
-                <Copy style={{ fontSize: 14, color: c.muted, marginTop: 3 }}>
-                  Decisions and demo text replies
-                </Copy>
               </View>
               <Feather name="chevron-right" size={20} color={c.muted} />
             </Pressable>
@@ -126,9 +123,6 @@ export default function ProfileScreen() {
               <Feather name="settings" color={c.text} size={22} />
               <View style={{ flex: 1 }}>
                 <Copy style={{ fontWeight: "600" }}>Settings</Copy>
-                <Copy style={{ fontSize: 14, color: c.muted, marginTop: 3 }}>
-                  Device, preferences, and demo controls
-                </Copy>
               </View>
               <Feather name="chevron-right" size={20} color={c.muted} />
             </Pressable>

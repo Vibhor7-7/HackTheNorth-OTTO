@@ -108,7 +108,7 @@ export default function ConnectionsScreen() {
               <View
                 style={{ flexDirection: "row", gap: 14, alignItems: "center" }}
               >
-                <ToolMark id={tool.id} size={46} />
+                <ToolMark id={tool.id} size={46} logoUrl={tool.logoUrl} />
                 <View style={{ flex: 1 }}>
                   <Copy style={{ fontSize: 19, fontWeight: "600" }}>
                     {tool.name}
@@ -143,7 +143,7 @@ export default function ConnectionsScreen() {
                   borderColor: c.line,
                 }}
               >
-                <ToolMark id={tool.id} />
+                <ToolMark id={tool.id} logoUrl={tool.logoUrl} />
                 <View style={{ flex: 1 }}>
                   <Copy style={{ fontWeight: "600", fontSize: 17 }}>
                     {tool.name}
@@ -192,19 +192,15 @@ export default function ConnectionsScreen() {
             <Feather name="arrow-up-right" size={20} color={c.accent} />
           </View>
           <Copy style={{ color: c.muted, marginTop: 10 }}>
-            Otto finds the tools a task needs and reuses the access you?ve
-            already granted.
+            Tools connect when a task needs them.
           </Copy>
           {available.length > 0 && (
             <View style={{ flexDirection: "row", gap: 10, marginTop: 18 }}>
               {available.map((tool) => (
-                <ToolMark key={tool.id} id={tool.id} />
+                <ToolMark key={tool.id} id={tool.id} logoUrl={tool.logoUrl} />
               ))}
             </View>
           )}
-          <Copy style={{ color: c.accent, marginTop: 14 }}>
-            You sign in only when access is needed.
-          </Copy>
         </Pressable>
         <Section title="Custom MCP" />
         <View style={s.group}>
@@ -220,7 +216,7 @@ export default function ConnectionsScreen() {
               <View
                 style={{ flexDirection: "row", gap: 12, alignItems: "center" }}
               >
-                <Feather name="server" size={22} color={c.accent} />
+                <ToolMark id={server.id} logoUrl={server.logoUrl} />
                 <Copy style={{ fontWeight: "600", fontSize: 17, flex: 1 }}>
                   {server.name}
                 </Copy>
@@ -254,16 +250,13 @@ export default function ConnectionsScreen() {
                 {server.url}
               </Copy>
               <Copy style={{ color: c.muted, fontSize: 14, marginTop: 4 }}>
-                Saved locally ? not connected
+                Saved locally. Not connected.
               </Copy>
             </View>
           ))}
           {!mcps.length && (
             <View style={{ padding: 20 }}>
-              <Copy style={{ fontWeight: "600" }}>Bring your own tools</Copy>
-              <Copy style={{ color: c.muted, marginTop: 8 }}>
-                Save an MCP server for Otto to use when the backend is ready.
-              </Copy>
+              <Copy style={{ color: c.muted }}>No custom servers</Copy>
             </View>
           )}
         </View>
@@ -372,9 +365,9 @@ export default function ConnectionsScreen() {
                     style={s.input}
                   />
                   <Copy style={{ color: c.muted, marginVertical: 18 }}>
-                    Saved on this device only. Don?t include API keys, tokens or
-                    passwords. Connection and authentication will come with the
-                    backend.
+                    Saved on this device only. Do not include API keys, tokens
+                    or passwords. Connection and authentication will come with
+                    the backend.
                   </Copy>
                   <Button
                     label="Save server"
@@ -392,9 +385,9 @@ export default function ConnectionsScreen() {
                   <Copy
                     style={{ color: c.muted, marginTop: 20, lineHeight: 25 }}
                   >
-                    If an app needs your account, you?ll be asked to sign in and
-                    grant access. Tool discovery does not bypass OAuth or your
-                    approval for sensitive actions.
+                    If an app needs your account, you will be asked to sign in
+                    and grant access. Tool discovery does not bypass OAuth or
+                    your approval for sensitive actions.
                   </Copy>
                   <Copy style={{ color: c.muted, marginVertical: 20 }}>
                     This preview simulates discovery and sign-in. No Composio
