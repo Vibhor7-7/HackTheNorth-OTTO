@@ -22,20 +22,66 @@ function systemPrompt(): string {
   const notes = listMemories("user").map((m) => m.text);
   return [
     "You are Otto, a wearable assistant. The user is chatting with you by text about their day.",
-    "You have tools to look up what the user said (turns), what you did for them (tasks),",
-    "open action items, saved memories, and their profile. Look things up before answering;",
-    "do not guess about the user's day. Be brief and specific. If you found something, say so",
-    "concretely - a date, a time, a task's outcome - rather than summarising vaguely.",
-    "If the user asks you to DO something, call run_task and say you are on it.",
-    "If a lookup returns nothing, say plainly that there is nothing recorded rather than inventing it.",
+    "",
+    "WHAT YOU CAN SEE: only Otto's own record - what the user said (turns), what you did for",
+    "them (tasks), open action items, saved memories, and their profile. Look things up before",
+    "answering; do not guess about the user's day. Be brief and specific. If you found something,",
+    "say so concretely - a date, a time, a task's outcome - rather than summarising vaguely.",
+    "",
+    "WHAT YOU CANNOT SEE: the user's Google Calendar, Gmail, GitHub, or any other connected",
+    "service. You have no tool that reads them (CHAT-6). Never state what is or is not in one.",
+    "\"You have no meetings tomorrow\" is a claim about a calendar you cannot read, and saying it",
+    "when the calendar is full is the worst thing you can do here.",
+    "",
+    "SO: if answering needs live data from a connected service, call run_task with the lookup as",
+    "the goal, then tell the user you are checking and that the answer will appear on their Home",
+    "tab. Do not answer the question yourself in the same breath - you do not have the answer yet.",
+    "The same goes for anything the user asks you to DO: call run_task and say you are on it.",
+    "One exception worth knowing: \"what did I commit to\" means promises the user made out loud,",
+    "which ARE in your record as action items. It does not mean git commits. Answer it from the record.",
+    "Never tell the user you are checking, looking into, or fetching something unless you have",
+    "actually called run_task in this same reply. Saying it without calling it leaves them",
+    "waiting for an answer that is never coming, which is worse than admitting you cannot see it.",
+    "",
+    "If a lookup returns nothing, say plainly that there is nothing IN OTTO'S RECORD, and never",
+    "extend that to mean the user's calendar, inbox or repositories are empty. If you are not sure",
+    "which you are talking about, say which one you checked.",
     "",
     `User profile: ${JSON.stringify(profile)}.`,
     notes.length ? `Notes the user gave you: ${notes.join(" | ")}.` : "The user has given you no notes yet.",
   ].join("\n");
 }
 
+/**
+ * Questions that cannot be answered from Otto's record, because the answer lives
+ * in a service only the agent loop can reach (CHAT-6).
+ *
+ * The prompt alone does not hold here: asked "anything on my calendar today?",
+ * the model reads an empty store and answers "no events scheduled" - a confident
+ * claim about a calendar it cannot see. So when the question is clearly about a
+ * connected service, run_task is forced rather than suggested. Its output then
+ * tells the model it has no answer yet, which is what stops the invention.
+ */
+const LIVE_DATA =
+  /\b(calendars?|schedules?|scheduled|meetings?|appointments?|events?|busy|availabilit\w*|inbox|e-?mails?|gmail|unread|github|repos?|repositor\w+|pull requests?|PRs?|issues?)\b|\b(?:am i|are we|any(?:thing)?) free\b|\bfree (?:at|on|today|tomorrow|this)\b/i;
+
+/**
+ * Things Otto's own record answers. These win: they are the Chat tab's whole point
+ * (APP-12). Deliberately past-tense and Otto-centric - "what did I", not "do I".
+ * "Do I have anything tomorrow" is a live question however it is phrased, and an
+ * exemption that broad let it be answered from a stale task summary.
+ */
+const OWN_RECORD = /\b(did i|what did|you do|otto|action item|committed to|commit to|still open|remind(ed)? me|note|memory|memories|task)\b/i;
+
+export function needsLiveLookup(text: string): boolean {
+  return LIVE_DATA.test(text) && !OWN_RECORD.test(text);
+}
+
 export async function* streamChatReply(userText: string): AsyncGenerator<ChatStreamEvent> {
   const history = listChatMessages(HISTORY);
+  // Forced only for the first model call, and only until run_task has run: after
+  // that the model needs a free turn to actually reply.
+  let forceLookup = needsLiveLookup(userText);
 
   const input: Record<string, unknown>[] = [
     { role: "system", content: systemPrompt() },
@@ -51,7 +97,7 @@ export async function* streamChatReply(userText: string): AsyncGenerator<ChatStr
       model: env.chatModel,
       input: input as never,
       tools: CHAT_TOOLS as never,
-      tool_choice: "auto",
+      tool_choice: forceLookup ? ({ type: "function", name: "run_task" } as never) : "auto",
       parallel_tool_calls: false,
     });
 
@@ -89,6 +135,7 @@ export async function* streamChatReply(userText: string): AsyncGenerator<ChatStr
       }
 
       calls++;
+      if (name === "run_task") forceLookup = false;
       const { result, citations: found } = runChatTool(name, args);
       citations.push(...found);
       log.info("lookup", { tool: name, args: Object.keys(args).join(",") });

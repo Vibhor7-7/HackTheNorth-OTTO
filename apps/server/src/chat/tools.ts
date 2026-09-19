@@ -59,8 +59,11 @@ export const CHAT_TOOLS: ChatTool[] = [
     // CHAT-4: the only write, and it goes through AG-12 like every other caller.
     type: "function", name: "run_task", strict: false,
     description:
-      "Start a real task. Use this only when the user asks for something to be done, " +
-      "not to answer a question about the past.",
+      "Start a real task through the agent loop, which is the ONLY thing that can reach the " +
+      "user's connected services. Call this both when the user asks for something to be done " +
+      "AND when answering needs live data you cannot see - anything in their calendar, inbox " +
+      "or repositories. Do not call it to answer a question about Otto's own record; the read " +
+      "tools cover that. It returns immediately with a task id, NOT with the answer.",
     parameters: obj({ goal: { type: "string", description: "One clear sentence." } }, ["goal"]),
   },
 ];
@@ -71,7 +74,30 @@ export interface ToolOutcome {
   citations: { kind: "turn" | "task"; id: string }[];
 }
 
+/**
+ * An empty read is the moment the model invents an answer: it finds nothing in
+ * Otto's record and reports that as "your calendar is free". Returning a bare []
+ * leaves it to draw its own conclusion, so say what the emptiness does and does
+ * not mean, and point at the only tool that can actually go and look (CHAT-6).
+ */
+const EMPTY_NOTE =
+  "Otto's own record has nothing matching this. Two cases, and they end differently. " +
+  "If the user asked about THEIR OWN history - what they did, what they committed to, " +
+  "their notes or open items - then 'there is nothing recorded' IS the honest answer: say " +
+  "it and stop. Do not escalate it into a task. " +
+  "If instead they asked about a connected service - calendar, inbox, repositories - this " +
+  "emptiness tells you nothing at all, because you cannot see those: call run_task to go " +
+  "and look, and never report the calendar or inbox as empty on the strength of this.";
+
 export function runChatTool(name: string, args: Record<string, unknown>): ToolOutcome {
+  const outcome = dispatch(name, args);
+  if (Array.isArray(outcome.result) && outcome.result.length === 0) {
+    return { ...outcome, result: { found: 0, results: [], note: EMPTY_NOTE } };
+  }
+  return outcome;
+}
+
+function dispatch(name: string, args: Record<string, unknown>): ToolOutcome {
   const cap = (n: unknown, def: number, max: number) =>
     Math.min(Math.max(Number(n) || def, 1), max);
 
@@ -133,7 +159,19 @@ export function runChatTool(name: string, args: Record<string, unknown>): ToolOu
       const goal = String(args.goal ?? "").trim();
       if (!goal) return { result: { error: "goal is required" }, citations: [] };
       const started = runTask({ goal, source: "chat" });
-      return { result: started, citations: [{ kind: "task", id: started.task_id }] };
+      // The loop runs asynchronously, so there is no answer to report yet. Said
+      // plainly in the tool output because the model otherwise fills the silence
+      // with an invented one - "you have no meetings tomorrow" for a calendar it
+      // cannot read (CHAT-6).
+      return {
+        result: {
+          ...started,
+          note:
+            "The task is now running. You do NOT have its result. Tell the user you are on it " +
+            "and that the answer will appear on their Home tab. Do not state or guess the answer.",
+        },
+        citations: [{ kind: "task", id: started.task_id }],
+      };
     }
     default:
       return { result: { error: `unknown tool ${name}` }, citations: [] };
