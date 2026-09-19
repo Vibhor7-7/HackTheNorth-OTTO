@@ -151,6 +151,7 @@ const TOOLKIT_HINTS: Record<string, string[]> = {
   googlecalendar: ["calendar", "meeting", "schedule", "invite", "free", "busy", "event", "appointment"],
   gmail: ["email", "mail", "inbox", "gmail", "send", "invite", "reply", "forward", "address"],
   github: ["github", "issue", "issues", "repo", "repository", "pull", "pr", "commit", "branch", "notification"],
+  linkedin: ["linkedin", "post", "share", "article", "network", "followers", "connections", "profile"],
   // whatsapp is deliberately absent: the toolkit was dropped, so nothing should
   // steer a task towards it even if an auth config lingers in the account.
 };

@@ -55,6 +55,18 @@ export const CURATED_TOOLS: Record<string, string[]> = {
     "GITHUB_CREATE_AN_ISSUE_COMMENT",    // R2 - a public utterance in your name
     "GITHUB_MERGE_A_PULL_REQUEST",       // R2 - changes the default branch
   ],
+  // LinkedIn: read the profile, post. The upload and ads surface is left out;
+  // nothing in a spoken request needs a presigned image URL.
+  linkedin: [
+    "LINKEDIN_GET_MY_INFO",
+    "LINKEDIN_GET_COMPANY_INFO",
+    "LINKEDIN_GET_POST_CONTENT",
+    "LINKEDIN_LIST_REACTIONS",
+    "LINKEDIN_CREATE_LINKED_IN_POST",        // R2 - public, in the user's name
+    "LINKEDIN_CREATE_ARTICLE_OR_URL_SHARE",  // R2
+    "LINKEDIN_CREATE_COMMENT_ON_POST",       // R2
+    "LINKEDIN_DELETE_LINKED_IN_POST",        // R2
+  ],
 };
 
 /**

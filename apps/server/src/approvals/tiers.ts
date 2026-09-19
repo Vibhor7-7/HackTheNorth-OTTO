@@ -33,6 +33,17 @@ export const TIER_OVERRIDES: Record<string, RiskTier> = {
   // the unknown-tool default. Pinned explicitly so it cannot drift to R1 if the
   // patterns ever change.
   GITHUB_MERGE_A_PULL_REQUEST: "R2",
+
+  // LinkedIn. Every post, share and comment is a public utterance in the user's
+  // name - the GitHub comment reasoning above, on a bigger stage. CREATE would
+  // otherwise land them on R1 and they would run without asking.
+  LINKEDIN_CREATE_LINKED_IN_POST: "R2",
+  LINKEDIN_CREATE_ARTICLE_OR_URL_SHARE: "R2",
+  LINKEDIN_CREATE_VIDEO_POST: "R2",
+  LINKEDIN_CREATE_COMMENT_ON_POST: "R2",
+  // Reads whose slugs match no R0 verb and would fall to the unknown default.
+  LINKEDIN_WHO_AM_I: "R0",
+  LINKEDIN_GET_POST_CONTENT: "R0",
 };
 
 const R2_SLUG = /(SEND|DELETE|REMOVE|PUBLISH|PAY|ORDER|CHECKOUT|POST_|TWEET|PURCHASE|TRANSFER)/;

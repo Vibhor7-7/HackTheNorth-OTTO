@@ -97,6 +97,7 @@ const NAMES: Record<string, string> = {
   googlecalendar: "Google Calendar",
   gmail: "Gmail",
   github: "GitHub",
+  linkedin: "LinkedIn",
   whatsapp: "WhatsApp",
 };
 const pretty = (slug: string) => NAMES[slug] ?? slug.replace(/^\w/, (c) => c.toUpperCase());
