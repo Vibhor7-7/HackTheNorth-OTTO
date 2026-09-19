@@ -25,6 +25,7 @@ pnpm dev             # server on :3000 (REST + SSE + device WS on one port)
 pnpm dev:mobile      # Expo app (apps/mobile uses npm, not pnpm - see pnpm-workspace.yaml)
 pnpm fake-device     # DEV-1: laptop mic speaks the device protocol (needs ffmpeg)
 pnpm typecheck       # every package
+pnpm whatsapp        # WhatsApp setup + smoke test (status|connect|numbers|send|disconnect)
 ```
 
 `apps/server/.env` comes from `apps/server/.env.example` (Section 5.2).

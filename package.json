@@ -11,7 +11,8 @@
     "dev:mobile": "npm --prefix apps/mobile start",
     "fake-device": "pnpm --filter @otto/fake-device start",
     "typecheck": "pnpm -r --no-bail typecheck",
-    "smoke": "pnpm --filter @otto/fake-device smoke"
+    "smoke": "pnpm --filter @otto/fake-device smoke",
+    "whatsapp": "pnpm --filter @otto/server whatsapp"
   },
   "devDependencies": {
     "tsx": "^4.19.2",
