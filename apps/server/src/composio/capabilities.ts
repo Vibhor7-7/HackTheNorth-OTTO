@@ -64,7 +64,9 @@ export function capabilitySummary(): ListCapabilitiesResult {
       ? ["whether the user is free in a time range", "what is on the user's calendar on a day"]
       : [],
     cannot: [
-      "anything in an app that is not connected; offer to connect it from the app",
+      // D-37: the web is always available, so "not connected" no longer means
+      // "cannot find out" - it only limits acting inside that app.
+      "act inside an app that is not connected; offer to connect it from the app",
       "sending, posting, deleting or paying without the user approving it in the app first",
       "acting without a connected account; Otto never asks for passwords",
     ],
@@ -72,8 +74,23 @@ export function capabilitySummary(): ListCapabilitiesResult {
   };
 }
 
+/**
+ * D-37: the mechanical rule turns COMPOSIO_SEARCH_WEB into "web", which tells the
+ * voice model nothing. A toolkit whose slugs do not read as English says what it
+ * does in its own words instead.
+ */
+const PHRASE_OVERRIDES: Record<string, string[]> = {
+  composio_search: [
+    "search the web and answer from live sources",
+    "look up current news",
+    "read a web page",
+  ],
+};
+
 /** "GITHUB_CREATE_AN_ISSUE_COMMENT" -> "create an issue comment". */
 function phrases(toolkit: string): string[] {
+  const override = PHRASE_OVERRIDES[toolkit];
+  if (override) return override;
   const prefix = `${toolkit.toUpperCase()}_`;
   return (CURATED_TOOLS[toolkit] ?? []).map((slug) =>
     slug.startsWith(prefix) ? slug.slice(prefix.length).toLowerCase().replace(/_/g, " ") : slug.toLowerCase(),

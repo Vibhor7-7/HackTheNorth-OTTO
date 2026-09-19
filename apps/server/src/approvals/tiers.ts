@@ -49,6 +49,14 @@ export const TIER_OVERRIDES: Record<string, RiskTier> = {
   // matches no pattern, so this would reach R2 by default; pinned so it cannot
   // drift, because the approval card carrying the exact prompt is the safeguard.
   CLAUDECODE_RUN: "R2",
+
+  // D-37. Reading the public web changes nothing and sends nothing, so all three
+  // are R0 and run without an approval. Pinned rather than left to the patterns:
+  // COMPOSIO_SEARCH_WEB would reach R0 only through the SEARCH in its toolkit
+  // prefix, which is a coincidence of naming, not a rule.
+  COMPOSIO_SEARCH_WEB: "R0",
+  COMPOSIO_SEARCH_NEWS: "R0",
+  COMPOSIO_SEARCH_FETCH_URL_CONTENT: "R0",
 };
 
 const R2_SLUG = /(SEND|DELETE|REMOVE|PUBLISH|PAY|ORDER|CHECKOUT|POST_|TWEET|PURCHASE|TRANSFER)/;
@@ -92,5 +100,17 @@ function hasRiskyArg(args: unknown): boolean {
   return R2_ARGS.some((risky) => keys.includes(risky));
 }
 
+/**
+ * Toolkit slugs that themselves contain an underscore, so the first-underscore
+ * rule below would truncate them. Without this, every COMPOSIO_SEARCH_* step is
+ * logged against a toolkit called "composio" that does not exist, and the
+ * connection lookup in the gate asks about the wrong thing (D-37).
+ */
+const COMPOUND_TOOLKITS = ["composio_search"];
+
 /** Composio slugs are TOOLKIT_VERB_NOUN; the toolkit is the part before the first underscore. */
-export const toolkitOf = (slug: string): string => slug.split("_", 1)[0]!.toLowerCase();
+export const toolkitOf = (slug: string): string => {
+  const lower = slug.toLowerCase();
+  const compound = COMPOUND_TOOLKITS.find((tk) => lower.startsWith(`${tk}_`));
+  return compound ?? lower.split("_", 1)[0]!;
+};

@@ -62,8 +62,18 @@ export async function discover(goal: string, max = 2): Promise<Discovery> {
   // evidence; a curated keyword match is the reliable fallback.
   const scored = available
     .map((tk) => ({ ...tk, score: scoreToolkit(tk.slug, goal, hinted) + (named.some((c) => c.slug === tk.slug) ? 6 : 0) }))
-    .filter((tk) => tk.score > 0)
-    .sort((a, b) => b.score - a.score || Number(b.connected) - Number(a.connected));
+    .filter((tk) => tk.score > 0);
+
+  // D-37. A factual question names no app, so every curated toolkit sits on its
+  // floor score and the sort hands the agent whichever happens to come first -
+  // measured: "find the best restaurants in Waterloo, Canada" chose LinkedIn and
+  // GitHub. When nothing actually matched the goal, the web is the right answer.
+  if (!scored.some((tk) => tk.score > FLOOR_SCORE)) {
+    const web = scored.find((tk) => tk.slug === WEB_SEARCH_TOOLKIT);
+    if (web) web.score = FLOOR_SCORE + 4;
+  }
+
+  scored.sort((a, b) => b.score - a.score || Number(b.connected) - Number(a.connected));
 
   const chosen: DiscoveredToolkit[] = [];
   for (const tk of scored) {
@@ -193,9 +203,23 @@ const TOOLKIT_HINTS: Record<string, string[]> = {
   github: ["github", "issue", "issues", "repo", "repository", "pull", "pr", "commit", "branch", "notification"],
   linkedin: ["linkedin", "post", "share", "article", "network", "followers", "connections", "profile"],
   claudecode: ["claude", "code", "codebase", "repo", "bug", "fix", "test", "tests", "refactor", "implement", "function", "file", "typescript", "compile", "lint", "build"],
+  // D-37. These only have to win the ties; the real safety net is the fallback in
+  // discover(), because the goals that need the web ("best restaurants in
+  // Waterloo") usually contain none of these words.
+  composio_search: [
+    "search", "google", "web", "online", "news", "latest", "current", "today",
+    "weather", "price", "stock", "restaurant", "restaurants", "near", "nearby",
+    "best", "recommend", "reviews", "hours", "open", "cost", "who", "what", "where",
+  ],
   // whatsapp is deliberately absent: the toolkit was dropped, so nothing should
   // steer a task towards it even if an auth config lingers in the account.
 };
+
+/** D-37: the no-auth toolkit that can reach the open web (toolkits.ts). */
+export const WEB_SEARCH_TOOLKIT = "composio_search";
+
+/** What a curated toolkit scores when nothing in the goal points at it. */
+const FLOOR_SCORE = 1;
 
 function scoreToolkit(slug: string, goal: string, hinted: Set<string>): number {
   const words = new Set(goal.toLowerCase().match(/[a-z]{3,}/g) ?? []);
@@ -203,7 +227,7 @@ function scoreToolkit(slug: string, goal: string, hinted: Set<string>): number {
   if (hinted.has(slug)) score += 10;
   for (const hint of TOOLKIT_HINTS[slug] ?? []) if (words.has(hint)) score += 3;
   // A curated toolkit is one the demo needs; never let it score zero outright.
-  if (score === 0 && slug in CURATED_TOOLS) score = 1;
+  if (score === 0 && slug in CURATED_TOOLS) score = FLOOR_SCORE;
   return score;
 }
 
