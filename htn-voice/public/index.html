@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Voice gateway test client</title>
+<style>
+  :root { color-scheme: dark; }
+  body {
+    margin: 0; min-height: 100vh; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 24px;
+    background: #111; color: #eee; font: 16px/1.4 system-ui, sans-serif;
+  }
+  #btn {
+    width: 220px; height: 220px; border-radius: 50%; border: none; cursor: pointer;
+    font: 600 22px system-ui, sans-serif; color: #fff; background: #2a6df4;
+    box-shadow: 0 0 0 0 rgba(255,80,80,.6); transition: background .15s;
+  }
+  #btn.recording { background: #e0332e; animation: pulse 1.2s infinite; }
+  #btn.busy { background: #555; cursor: wait; }
+  @keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(255,80,80,.6); }
+    100% { box-shadow: 0 0 0 40px rgba(255,80,80,0); }
+  }
+  #status { min-height: 1.4em; color: #aaa; }
+  table { border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  td { padding: 2px 12px; }
+  td:last-child { text-align: right; color: #8fd; }
+  small { color: #666; }
+</style>
+</head>
+<body>
+  <button id="btn">Press to talk</button>
+  <div id="status">Idle</div>
+  <table id="timings"></table>
+  <small>Sends raw PCM 24 kHz s16le mono to POST /v1/turn</small>
+
+<script>
+const RATE = 24000;
+const btn = document.getElementById('btn');
+const statusEl = document.getElementById('status');
+const timingsEl = document.getElementById('timings');
+const deviceId = 'browser-' + Math.random().toString(36).slice(2, 8);
+
+let ctx, source, worklet, chunks = [], state = 'idle';
+
+const setStatus = (s) => statusEl.textContent = s;
+
+async function getContext() {
+  if (!ctx) {
+    ctx = new AudioContext({ sampleRate: RATE });
+    // Tiny inline worklet that forwards Float32 frames to the main thread.
+    const src = `class Tap extends AudioWorkletProcessor {
+      process(inputs) { const ch = inputs[0][0]; if (ch) this.port.postMessage(ch.slice()); return true; }
+    }; registerProcessor('tap', Tap);`;
+    await ctx.audioWorklet.addModule(URL.createObjectURL(new Blob([src], { type: 'text/javascript' })));
+  }
+  if (ctx.state === 'suspended') await ctx.resume();
+  return ctx;
+}
+
+async function startRecording() {
+  const c = await getContext();
+  const stream = await navigator.mediaDevices.getUserMedia({
+    audio: { channelCount: 1, sampleRate: RATE, echoCancellation: true, noiseSuppression: true },
+  });
+  source = c.createMediaStreamSource(stream);
+  worklet = new AudioWorkletNode(c, 'tap');
+  worklet.port.onmessage = (e) => chunks.push(e.data);
+  source.connect(worklet);
+  chunks = [];
+  state = 'recording';
+  btn.className = 'recording';
+  btn.textContent = 'Recording… press to stop';
+  setStatus('Listening');
+}
+
+function stopRecording() {
+  source.mediaStream.getTracks().forEach((t) => t.stop());
+  source.disconnect();
+  worklet.disconnect();
+  const n = chunks.reduce((a, c) => a + c.length, 0);
+  const f32 = new Float32Array(n);
+  let off = 0;
+  for (const c of chunks) { f32.set(c, off); off += c.length; }
+  return floatToPcm16(f32);
+}
+
+// Float32 [-1, 1] -> Int16 little-endian bytes.
+function floatToPcm16(f32) {
+  const out = new Int16Array(f32.length);
+  for (let i = 0; i < f32.length; i++) {
+    const s = Math.max(-1, Math.min(1, f32[i]));
+    out[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+  }
+  return new Uint8Array(out.buffer);
+}
+
+async function sendTurn(pcm) {
+  state = 'busy';
+  btn.className = 'busy';
+  btn.textContent = 'Thinking…';
+  setStatus(`Sending ${(pcm.byteLength / (RATE * 2)).toFixed(1)}s of audio`);
+  timingsEl.innerHTML = '';
+  const t0 = performance.now();
+
+  const res = await fetch('/v1/turn', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/octet-stream', 'X-Device-Id': deviceId },
+    body: pcm,
+  });
+  if (!res.ok) {
+    setStatus(`Error ${res.status}: ${await res.text()}`);
+    return;
+  }
+
+  const rows = [];
+  res.headers.forEach((v, k) => { if (k.startsWith('x-timing-')) rows.push([k.slice(9) + ' (server)', v]); });
+  rows.push(['first byte (client)', Math.round(performance.now() - t0)]);
+  renderTimings(rows);
+
+  setStatus('Playing');
+  btn.textContent = 'Speaking…';
+  await playStream(res.body);
+  rows.push(['total (client)', Math.round(performance.now() - t0)]);
+  renderTimings(rows);
+  setStatus('Done');
+}
+
+// Schedule each PCM chunk back to back on the AudioContext clock as it arrives.
+async function playStream(body) {
+  const c = await getContext();
+  const reader = body.getReader();
+  let playhead = c.currentTime + 0.05;
+  let carry = new Uint8Array(0);
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    // Keep an even byte count so we never split a 16-bit sample.
+    let bytes = new Uint8Array(carry.length + value.length);
+    bytes.set(carry); bytes.set(value, carry.length);
+    const usable = bytes.length & ~1;
+    carry = bytes.slice(usable);
+    if (usable === 0) continue;
+    const i16 = new Int16Array(bytes.buffer, 0, usable / 2);
+    const f32 = new Float32Array(i16.length);
+    for (let i = 0; i < i16.length; i++) f32[i] = i16[i] / 0x8000;
+
+    const buf = c.createBuffer(1, f32.length, RATE);
+    buf.copyToChannel(f32, 0);
+    const node = c.createBufferSource();
+    node.buffer = buf;
+    node.connect(c.destination);
+    if (playhead < c.currentTime) playhead = c.currentTime;
+    node.start(playhead);
+    playhead += buf.duration;
+  }
+  await new Promise((r) => setTimeout(r, Math.max(0, (playhead - c.currentTime) * 1000)));
+}
+
+function renderTimings(rows) {
+  timingsEl.innerHTML = rows.map(([k, v]) => `<tr><td>${k}</td><td>${v} ms</td></tr>`).join('');
+}
+
+btn.onclick = async () => {
+  try {
+    if (state === 'idle') await startRecording();
+    else if (state === 'recording') await sendTurn(stopRecording());
+  } catch (err) {
+    setStatus('Error: ' + err.message);
+  } finally {
+    if (state !== 'recording') {
+      state = 'idle';
+      btn.className = '';
+      btn.textContent = 'Press to talk';
+    }
+  }
+};
+</script>
+</body>
+</html>
