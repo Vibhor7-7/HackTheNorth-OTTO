@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | Event | Hack the North 2026 |
-| Spec version | 1.8.0 (supersedes 1.7.2) |
+| Spec version | 1.9.0 (supersedes 1.8.0) |
 | Product name | **Otto.** The device, the agent, and the app are all Otto. Use the name in the system prompt, the app, and the pitch. |
 | Status | **Final for build.** Open decisions in Section 13 only. |
 | Tracks | OpenAI API Prizes, Composio, Expo (primary). Rox (natural fit, no extra work). Shopify: cut (D-25). Elastic: cut (D-12). |
@@ -982,6 +982,13 @@ Judge check-ins: OpenAI, Composio and Expo booths early, and once more after sta
 
 ## 17. Changelog
 
+- **1.9.0**: ACT-1 to ACT-4 and ACT-6 implemented (action item extraction) and
+  CHAT-1 to CHAT-6 implemented (the Chat tab's context agent). Extraction runs off
+  the voice path after each Turn, keeps items at confidence 0.6 or above, and
+  dedupes against both open items and goals the turn already ran as a Task. The
+  context agent reads turns, tasks, action items, memories and the profile, is
+  capped at six lookups per message, and cites the turns behind its answer (CHAT-5).
+  Its only write is `run_task` with `source: "chat"` (CHAT-4, CHAT-6).
 - **1.8.0**: AG-6 implemented - a task that asks a question now suspends and resumes
   with the answer, from voice or from the app, instead of dropping it.
   `POST /api/tasks/:id/answer` added to 7.2; `answer_question`'s `task_id` is now
