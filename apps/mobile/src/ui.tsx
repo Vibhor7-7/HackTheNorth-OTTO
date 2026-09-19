@@ -1,0 +1,20 @@
+import React, { useState, useSyncExternalStore } from 'react';
+import { Pressable, Text, TextProps, View, StyleSheet, ViewStyle, StyleProp } from 'react-native';
+import Animated, { FadeInDown, ReduceMotion } from 'react-native-reanimated';
+import { Feather } from '@expo/vector-icons';
+import { colors as c, fonts, motion } from './theme';
+import { otto } from './data/mock';
+
+export function useOtto() { return useSyncExternalStore(otto.subscribe, otto.getSnapshot, otto.getSnapshot); }
+export function Copy({ style, ...props }: TextProps) { return <Text {...props} style={[s.copy, style]} />; }
+export function Display({ style, ...props }: TextProps) { return <Text {...props} style={[s.display, style]} />; }
+export function Eyebrow({ children, light = false }: { children: React.ReactNode; light?: boolean }) { return <Copy style={{ fontFamily: fonts.medium, fontSize: 11, letterSpacing: 1.8, textTransform: 'uppercase', color: light ? c.bone : c.muted }}>{children}</Copy>; }
+export function Reveal({ children, delay = 0, style }: {children: React.ReactNode; delay?: number; style?: StyleProp<ViewStyle>}) { return <Animated.View entering={FadeInDown.duration(motion.enter).delay(delay).reduceMotion(ReduceMotion.System)} style={style}>{children}</Animated.View>; }
+export function Button({ label, onPress, quiet = false, light = false, disabled = false, icon }: {label: string; onPress: () => void | Promise<unknown>; quiet?: boolean; light?: boolean; disabled?: boolean; icon?: React.ComponentProps<typeof Feather>['name']}) {
+ const [busy, setBusy] = useState(false); const [error, setError] = useState('');
+ return <View><Pressable accessibilityRole="button" accessibilityLabel={label} disabled={disabled || busy} onPress={async () => { setBusy(true); setError(''); try { await onPress(); } catch(e) { setError(e instanceof Error ? e.message : 'Please try again.'); } finally { setBusy(false); } }} style={({pressed}) => [s.button, { backgroundColor: quiet ? 'transparent' : light ? c.bone : c.ink, borderColor: light ? c.bone : c.ink, opacity: disabled || busy ? .45 : pressed ? .7 : 1 }]}><Copy style={{fontFamily: fonts.medium, color: quiet ? light ? c.bone : c.ink : light ? c.ink : c.bone}}>{busy ? 'One moment…' : label}</Copy>{icon && <Feather name={icon} size={18} color={light ? c.ink : quiet ? c.ink : c.bone}/>}</Pressable>{!!error && <Copy style={{color: c.signal, marginTop: 8}}>{error}</Copy>}</View>;
+}
+export function Section({ title, aside }: {title: string; aside?: string}) { return <View style={s.section}><Display style={{fontSize: 28}}>{title}</Display>{aside && <Eyebrow>{aside}</Eyebrow>}</View>; }
+export function Masthead({ title, subtitle }: {title:string; subtitle:string}) { return <View style={{paddingTop: 24, paddingBottom: 32}}><Eyebrow>Otto / Demo</Eyebrow><Display style={{fontSize: 52, marginTop: 14}}>{title}</Display><Copy style={{color:c.muted, marginTop:12, maxWidth:320}}>{subtitle}</Copy></View>; }
+export function NetworkBanner() { const {network} = useOtto(); return network === 'online' ? null : <View accessibilityRole="alert" style={{padding:12,backgroundColor:c.ink}}><Copy style={{color:c.bone,fontSize:13}}>{network === 'offline' ? 'You’re offline. Your record is still here.' : 'Reconnecting to Otto…'}</Copy></View>; }
+export const s = StyleSheet.create({ copy: {fontFamily:fonts.body,fontSize:15,lineHeight:23,color:c.ink}, display:{fontFamily:fonts.display,fontSize:36,lineHeight:undefined,letterSpacing:-1.3,color:c.ink}, button:{minHeight:48,paddingHorizontal:20,paddingVertical:12,borderWidth:1,borderRadius:6,flexDirection:'row',alignItems:'center',justifyContent:'center',gap:12}, section:{flexDirection:'row',alignItems:'baseline',justifyContent:'space-between',marginTop:36,marginBottom:20,gap:12}, page:{flex:1,backgroundColor:c.bone}, content:{paddingHorizontal:24,paddingBottom:48,width:'100%',maxWidth:680,alignSelf:'center'}, row:{paddingVertical:20,borderBottomWidth:1,borderBottomColor:c.line}, input:{fontFamily:fonts.body,fontSize:16,color:c.ink,padding:16,borderWidth:1,borderColor:c.line,borderRadius:6,backgroundColor:c.paper,minHeight:50} });
