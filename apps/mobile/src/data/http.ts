@@ -352,29 +352,48 @@ export class HttpOtto implements OttoDataSource {
   }
 
   connect = async (toolkitId: string) => {
-    // The mock flipped a local flag; a real connection needs the user to sign in
-    // at Composio. So this opens the Connect Link itself - the screen only awaits
-    // and then shows its success state, and a promise that never settles there
-    // leaves the button stuck mid-press.
     const { link } = await this.request<{ link: string }>(`/api/extensions/${toolkitId}/connect`, { method: 'POST' });
     this.lastConnectLink = link;
-    try {
-      const browser = require('expo-web-browser') as { openBrowserAsync(url: string): Promise<unknown> };
-      await browser.openBrowserAsync(link);
-    } catch {
-      // Not under Expo, or the browser refused: fall through to Linking.
-      try {
-        const linking = require('react-native').Linking as { openURL(url: string): Promise<unknown> };
-        await linking.openURL(link);
-      } catch {
-        console.warn(`[otto] could not open the connect link, open it manually: ${link}`);
-      }
-    }
-    // Composio tells the server when the user finishes (GET /connect/callback), and
-    // that arrives over SSE. Re-read now as well, so returning from the browser
-    // shows the new status even if the event was missed.
-    await this.refreshExtensions().catch(() => {});
+    this.openLink(link);
+    // Deliberately does not wait for the browser or for the connection to finish.
+    // The status change arrives as extension.updated when Composio calls the
+    // server's /connect/callback, so the screen can return to a normal state now.
   };
+
+  /**
+   * Open a Connect Link without blocking on it.
+   *
+   * openBrowserAsync resolves when the browser is *dismissed*, not when the page
+   * loads - so awaiting it meant that after signing in, the promise stayed pending
+   * until the user manually closed the browser, and the Connect button sat frozen
+   * mid-press the whole time. Nothing here is awaited, and every failure path is
+   * swallowed into a log, because a browser that refuses to open must not leave a
+   * button stuck either.
+   */
+  private openLink(link: string): void {
+    const attempt = async () => {
+      try {
+        const browser = require('expo-web-browser') as {
+          openBrowserAsync(url: string): Promise<unknown>;
+        };
+        await browser.openBrowserAsync(link);
+      } catch {
+        try {
+          const { Linking } = require('react-native') as {
+            Linking: { openURL(url: string): Promise<unknown> };
+          };
+          await Linking.openURL(link);
+        } catch {
+          console.warn(`[otto] could not open the connect link; open it manually: ${link}`);
+        }
+      }
+      // The user is back. Re-read in case the SSE event was missed while the
+      // browser had the foreground.
+      await this.refreshExtensions().catch(() => {});
+    };
+    void attempt();
+  }
+
   /** The most recent Connect Link, in case a screen wants to show or re-open it. */
   lastConnectLink?: string;
 

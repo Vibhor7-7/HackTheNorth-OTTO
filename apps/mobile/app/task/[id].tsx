@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
@@ -149,6 +149,12 @@ export default function TaskDetail() {
   );
   const back = () =>
     router.canGoBack() ? router.back() : router.replace("/(tabs)/tasks");
+  // A restored route pointing at a task that no longer exists should not strand the
+  // user on "Task not found" (see approval/[id] for the same reasoning).
+  const missing = !task && state.hydrated;
+  useEffect(() => {
+    if (missing) router.replace("/(tabs)/tasks");
+  }, [missing]);
   return (
     <SafeAreaView style={s.page} edges={["top", "bottom"]}>
       <View style={{ paddingHorizontal: 20 }}>

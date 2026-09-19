@@ -30,24 +30,21 @@ export default function ApprovalScreen() {
   }, []);
   const close = () =>
     router.canGoBack() ? router.back() : router.replace("/(tabs)/home");
-  // Still loading: the approval may exist and simply not have arrived yet. Saying
-  // "Unavailable" here made every launch on a restored route a dead end.
-  if (!approval && !state.hydrated)
-    return (
-      <SafeAreaView style={s.page}>
-        <Loading title="Loading request" />
-      </SafeAreaView>
-    );
+  // Expo Router restores the last route on launch, so this screen is often opened
+  // pointing at an approval that has since been decided, expired, or vanished with a
+  // restarted server. Two different situations, and neither should be a dead end:
+  // while the first load is in flight the approval may simply be late, and once it
+  // has finished and there is still nothing, the honest thing is to go where the
+  // user can act rather than make them tap through a wall.
+  const missing = !approval && state.hydrated;
+  useEffect(() => {
+    if (missing) router.replace("/(tabs)/home");
+  }, [missing]);
+
   if (!approval)
     return (
       <SafeAreaView style={s.page}>
-        <View style={s.content}>
-          <Header title="Unavailable" />
-          <Button
-            label="Back to Today"
-            onPress={() => router.replace("/(tabs)/home")}
-          />
-        </View>
+        <Loading title={missing ? "Taking you home" : "Loading request"} />
       </SafeAreaView>
     );
   const remaining = Math.max(
