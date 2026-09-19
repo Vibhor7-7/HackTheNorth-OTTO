@@ -6,11 +6,16 @@
 
 import { ACTIVE, composio, composioConfigured, items, listConnectedAccounts, log, userId } from "./client";
 import { callbackBaseUrl } from "../api/origin";
+import { catalogEntry } from "./catalog";
+import { disableToolkit, enableToolkit } from "../store";
 
 export type ConnectLinkResult =
   | { outcome: "ok"; link: string; requestId: string }
   /** The user already has an ACTIVE account here; there is nothing to connect. */
   | { outcome: "already_connected"; toolkit: string }
+  /** D-34: the toolkit needs no account; it is enabled and usable now. */
+  | { outcome: "no_auth_needed"; toolkit: string }
+  /** Needs credentials only the Composio dashboard takes (API key, custom OAuth app). */
   | { outcome: "no_auth_config"; toolkit: string }
   | { outcome: "key_lacks_write" }
   | { outcome: "error"; message: string };
@@ -23,11 +28,33 @@ export async function createConnectLink(toolkit: string): Promise<ConnectLinkRes
     const configs = items<{ id?: string; toolkit?: { slug?: string } | string; name?: string }>(
       await composio().authConfigs.list({} as never),
     );
-    const cfg = configs.find((c) => {
+    let cfg = configs.find((c) => {
       const s = typeof c.toolkit === "string" ? c.toolkit : c.toolkit?.slug;
       return (s ?? c.name ?? "").toLowerCase() === slug;
     });
-    if (!cfg?.id) return { outcome: "no_auth_config", toolkit: slug };
+
+    // D-34: no auth config yet. If Composio manages the OAuth for this toolkit,
+    // create one now - that is the whole dashboard step, and it needs nothing
+    // from the user. A toolkit with no auth at all is simply enabled. Anything
+    // else needs credentials this server does not take.
+    if (!cfg?.id) {
+      const entry = await catalogEntry(slug);
+      if (entry?.auth === "none") {
+        enableToolkit(slug);
+        log.info("no-auth toolkit enabled", { toolkit: slug });
+        return { outcome: "no_auth_needed", toolkit: slug };
+      }
+      if (entry?.auth !== "managed") return { outcome: "no_auth_config", toolkit: slug };
+      const created = (await composio().authConfigs.create(slug, {
+        type: "use_composio_managed_auth",
+        name: `otto-${slug}`,
+      })) as { id?: string };
+      if (!created.id) return { outcome: "error", message: "Composio returned no auth config id" };
+      log.info("auth config created", { toolkit: slug, auth_config: created.id });
+      cfg = { id: created.id };
+    }
+    const cfgId = cfg.id;
+    if (!cfgId) return { outcome: "error", message: "no auth config id" };
 
     // The SDK refuses to create a second link while an ACTIVE account exists on
     // this auth config ("Multiple connected accounts found ... allowMultiple").
@@ -36,7 +63,7 @@ export async function createConnectLink(toolkit: string): Promise<ConnectLinkRes
     // of the SDK's error. Anything that is not ACTIVE is a flow someone started
     // and abandoned; it is deleted first so it can never be mistaken for a
     // connection, and so the dashboard does not fill with INITIALIZING rows.
-    const existing = await listConnectedAccounts({ userIds: [userId()], authConfigIds: [cfg.id] });
+    const existing = await listConnectedAccounts({ userIds: [userId()], authConfigIds: [cfgId] });
     if (existing.some((a) => a.status === ACTIVE)) {
       log.info("already connected; no link needed", { toolkit: slug });
       return { outcome: "already_connected", toolkit: slug };
@@ -53,7 +80,7 @@ export async function createConnectLink(toolkit: string): Promise<ConnectLinkRes
     // The browser may land anywhere (Section 15); the callback resolves the
     // ConnectionRequest whichever way it returns.
     const callbackUrl = `${callbackBaseUrl()}/connect/callback?toolkit=${encodeURIComponent(slug)}`;
-    const req = (await composio().connectedAccounts.link(userId(), cfg.id, {
+    const req = (await composio().connectedAccounts.link(userId(), cfgId, {
       callbackUrl,
     } as never)) as { id?: string; redirectUrl?: string };
 
@@ -78,6 +105,8 @@ export async function createConnectLink(toolkit: string): Promise<ConnectLinkRes
 export async function disconnectToolkit(toolkit: string): Promise<number> {
   if (!composioConfigured()) return 0;
   const slug = toolkit.toLowerCase();
+  // D-34: a no-auth toolkit has no account to remove; forgetting it is the whole job.
+  if (disableToolkit(slug)) { log.info("no-auth toolkit disabled", { toolkit: slug }); return 1; }
   try {
     const accounts = (await listConnectedAccounts({ userIds: [userId()] })).filter((a) => {
       const s = typeof a.toolkit === "string" ? a.toolkit : a.toolkit?.slug;

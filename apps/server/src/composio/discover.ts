@@ -23,6 +23,7 @@
 
 import { activeToolkitSlugs, composio, items, log } from "./client";
 import { CURATED_TOOLS, rankUncuratedTools } from "./toolkits";
+import { enabledToolkitSlugs } from "../store";
 
 export interface DiscoveredToolkit {
   slug: string;
@@ -101,6 +102,10 @@ async function availableToolkits(): Promise<{ slug: string; name: string; connec
       const slug = slugOf(c.toolkit) || (c.name ?? "").toLowerCase();
       if (!slug || bySlug.has(slug)) continue;
       bySlug.set(slug, { slug, name: slug, connected: connected.has(slug) });
+    }
+    // D-34: no-auth toolkits have no auth config; they are enabled in the store.
+    for (const slug of enabledToolkitSlugs()) {
+      if (!bySlug.has(slug)) bySlug.set(slug, { slug, name: slug, connected: true });
     }
     const out = [...bySlug.values()];
     return out.length ? out : fallback();

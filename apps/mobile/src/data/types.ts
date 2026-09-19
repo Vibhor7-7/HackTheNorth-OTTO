@@ -5,7 +5,8 @@ export interface Task { id: string; goal: string; status: TaskStatus; source: Ta
 export interface TaskStep { id: string; task_id: string; seq: number; kind: 'plan' | 'tool_call' | 'tool_result' | 'approval_wait' | 'connection_wait' | 'question' | 'final' | 'error'; toolkit?: string; tool_slug?: string; risk?: 'R0' | 'R1' | 'R2'; summary: string; args_redacted?: unknown; result_redacted?: unknown; duration_ms?: number; created_at: string }
 export interface Approval { id: string; task_id: string; step_id: string; code: string; summary: string; facts: Record<string, string>; args_hash: string; status: 'pending' | 'approved' | 'denied' | 'expired'; channel?: 'app'; expires_at: string; decided_at?: string }
 export interface ConnectionRequest { id: string; task_id: string; step_id: string; toolkit: string; link: string; status: 'pending' | 'completed' | 'expired'; created_at: string; completed_at?: string }
-export interface Extension { id: string; name: string; description: string; status: 'connected' | 'needs_auth' | 'suggested'; tool_count: number; /** HTTPS artwork from trusted toolkit metadata, supplied by the future adapter. */ logoUrl?: string }
+export interface Extension { id: string; name: string; description: string; status: 'connected' | 'needs_auth' | 'suggested'; tool_count: number; /** HTTPS artwork from Composio's toolkit metadata (7.3 logo_url). */ logoUrl?: string; logo_url?: string }
+export interface CatalogEntry { slug: string; name: string; description: string; logo_url?: string; tool_count: number; categories: string[]; auth: 'managed' | 'none' | 'custom' }
 export interface Turn { id: string; user_text: string; assistant_text: string; task_ids: string[]; action_item_ids: string[]; latency_ms?: number; started_at: string; ended_at: string }
 export interface ActionItem { id: string; turn_id: string; title: string; suggested_goal: string; toolkit_hint?: string; confidence: number; snippet: string; status: 'open' | 'approved' | 'dismissed' | 'done'; task_id?: string; created_at: string; decided_at?: string }
 export interface Memory { id: string; text: string; source: 'user' | 'task_summary'; task_id?: string; created_at: string }
@@ -35,6 +36,8 @@ export interface OttoDataSource {
   setAutoApprove(on: boolean): Promise<void>;
   approve(id: string): Promise<void>; deny(id: string): Promise<void>;
   connect(toolkitId: string): Promise<void>; disconnect(toolkitId: string): Promise<void>;
+  /** D-34: browse Composio's catalogue. */
+  searchCatalog(q: string): Promise<CatalogEntry[]>;
   doAction(id: string): Promise<string>; dismissAction(id: string): Promise<void>;
   addMemory(text: string): Promise<void>; deleteMemory(id: string): Promise<void>;
   sendChat(text: string): Promise<void>;

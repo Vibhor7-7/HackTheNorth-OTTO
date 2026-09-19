@@ -49,6 +49,14 @@ export interface Extension {                // a Composio toolkit as seen by thi
   id: string; name: string; description: string;
   status: "connected" | "needs_auth" | "suggested";
   tool_count: number;
+  logo_url?: string;                        // from Composio's toolkit metadata (D-34)
+}
+
+export interface CatalogEntry {             // GET /api/catalog (D-34)
+  slug: string; name: string; description: string;
+  logo_url?: string; tool_count: number; categories: string[];
+  /** managed: connects from the phone. none: needs no account. custom: dashboard only. */
+  auth: "managed" | "none" | "custom";
 }
 
 export interface Turn {

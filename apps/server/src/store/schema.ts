@@ -113,4 +113,10 @@ CREATE TABLE IF NOT EXISTS kv (
   key   TEXT PRIMARY KEY,
   value TEXT NOT NULL
 );
+
+-- D-34: no-auth toolkits the user added from the app's catalogue.
+CREATE TABLE IF NOT EXISTS enabled_toolkits (
+  slug        TEXT PRIMARY KEY,
+  enabled_at  TEXT NOT NULL
+);
 `;

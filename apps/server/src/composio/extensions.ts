@@ -5,6 +5,9 @@ import type { Extension } from "@otto/shared";
 import { activeToolkitSlugs, composio, composioConfigured, items, log } from "./client";
 import { CURATED_TOOLS } from "./toolkits";
 import { publish } from "../bus";
+import { catalog } from "./catalog";
+import { enabledToolkitSlugs } from "../store";
+import type { CatalogEntry } from "@otto/shared";
 
 /** Shown when Composio is unconfigured so the Connections tab is never empty. */
 const PLACEHOLDERS: Extension[] = Object.keys(CURATED_TOOLS).map((slug) => ({
@@ -19,10 +22,15 @@ export async function listExtensions(): Promise<Extension[]> {
   if (!composioConfigured()) return PLACEHOLDERS;
 
   try {
-    const [configs, connected] = await Promise.all([
+    const [configs, connected, entries] = await Promise.all([
       composio().authConfigs.list({} as never),
       activeToolkitSlugs(),
+      catalog().catch(() => [] as CatalogEntry[]),
     ]);
+    const meta = new Map(entries.map((e) => [e.slug, e]));
+    const name = (slug: string) => meta.get(slug)?.name ?? pretty(slug);
+    const logo = (slug: string) => meta.get(slug)?.logo_url;
+    const tools = (slug: string) => CURATED_TOOLS[slug]?.length ?? meta.get(slug)?.tool_count ?? 0;
 
     // A toolkit can have more than one auth config - a managed OAuth one and a
     // direct-token one, say - but the Connections tab shows one card per toolkit,
@@ -33,12 +41,26 @@ export async function listExtensions(): Promise<Extension[]> {
       if (!slug || byToolkit.has(slug)) continue;
       byToolkit.set(slug, {
         id: slug,
-        name: pretty(slug),
+        name: name(slug),
         description: connected.has(slug)
           ? "Connected. Otto can use this."
           : "Set up but not connected yet. Otto will ask when it needs this.",
         status: connected.has(slug) ? "connected" : "needs_auth",
-        tool_count: CURATED_TOOLS[slug]?.length ?? 0,
+        tool_count: tools(slug),
+        logo_url: logo(slug),
+      });
+    }
+
+    // D-34: toolkits that need no account, added from the catalogue.
+    for (const slug of enabledToolkitSlugs()) {
+      if (byToolkit.has(slug)) continue;
+      byToolkit.set(slug, {
+        id: slug,
+        name: name(slug),
+        description: "Needs no account. Otto can use this.",
+        status: "connected",
+        tool_count: tools(slug),
+        logo_url: logo(slug),
       });
     }
 
@@ -47,10 +69,11 @@ export async function listExtensions(): Promise<Extension[]> {
       if (byToolkit.has(slug)) continue;
       byToolkit.set(slug, {
         id: slug,
-        name: pretty(slug),
-        description: "No auth config yet. Create one in the Composio dashboard.",
+        name: name(slug),
+        description: "Not set up yet. Connect it and Otto can use it.",
         status: "suggested",
         tool_count: CURATED_TOOLS[slug]!.length,
+        logo_url: logo(slug),
       });
     }
 

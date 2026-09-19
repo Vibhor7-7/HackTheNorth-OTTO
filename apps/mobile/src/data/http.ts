@@ -6,7 +6,7 @@
 // is SSE).
 
 import type {
-  ActionItem, Approval, ChatMessage, ChatSession, ConnectionRequest, DemoScenario,
+  ActionItem, Approval, CatalogEntry, ChatMessage, ChatSession, ConnectionRequest, DemoScenario,
   DemoState, Device, Extension, HomePayload, Memory, NetworkState, OttoDataSource,
   OttoEvent, Profile, Settings, Task, TaskStep, Turn,
 } from './types';
@@ -51,6 +51,9 @@ function upsert<T extends { id: string }>(list: T[], item: T): T[] {
   copy[i] = item;
   return copy;
 }
+
+/** 7.3 says logo_url; the screens were written against logoUrl. Carry both. */
+const withLogo = (e: Extension): Extension => ({ ...e, logoUrl: e.logoUrl ?? e.logo_url });
 
 function emptyState(): DemoState {
   return {
@@ -166,7 +169,7 @@ export class HttpOtto implements OttoDataSource {
         approvals: home.approvals,
         connections: home.connections,
         actionItems: home.action_items,
-        turns, memories, extensions, messages, steps,
+        turns, memories, extensions: extensions.map(withLogo), messages, steps,
         network: 'online',
         hydrated: true,
       });
@@ -294,7 +297,7 @@ export class HttpOtto implements OttoDataSource {
         this.publish({ memories: upsert(this.state.memories, event.data) });
         break;
       case 'extension.updated':
-        this.publish({ extensions: upsert(this.state.extensions, event.data) });
+        this.publish({ extensions: upsert(this.state.extensions, withLogo(event.data)) });
         break;
       case 'device.updated':
         this.publish({ device: event.data });
@@ -363,7 +366,13 @@ export class HttpOtto implements OttoDataSource {
   }
 
   connect = async (toolkitId: string) => {
-    const { link } = await this.request<{ link: string }>(`/api/extensions/${toolkitId}/connect`, { method: 'POST' });
+    const res = await this.request<{ link?: string; connected?: boolean }>(`/api/extensions/${toolkitId}/connect`, { method: 'POST' });
+    if (!res.link) {
+      // D-34: a toolkit that needs no account is enabled already; just re-read.
+      await this.refreshExtensions();
+      return;
+    }
+    const link = res.link;
     this.lastConnectLink = link;
     this.openLink(link);
     // Deliberately does not wait for the browser or for the connection to finish.
@@ -414,8 +423,12 @@ export class HttpOtto implements OttoDataSource {
   };
 
   private async refreshExtensions() {
-    this.publish({ extensions: await this.request<Extension[]>('/api/extensions') });
+    this.publish({ extensions: (await this.request<Extension[]>('/api/extensions')).map(withLogo) });
   }
+
+  /** D-34: GET /api/catalog. Server-side search over Composio's toolkit list. */
+  searchCatalog = async (q: string): Promise<CatalogEntry[]> =>
+    this.request<CatalogEntry[]>(`/api/catalog?q=${encodeURIComponent(q)}&limit=40`);
 
   /** Pull to refresh: Home, the toolkit list and the device, in one round trip each. */
   refresh = async () => {
@@ -429,7 +442,7 @@ export class HttpOtto implements OttoDataSource {
       connections: home.connections,
       actionItems: home.action_items,
       tasks: home.recent_tasks,
-      extensions, device,
+      extensions: extensions.map(withLogo), device,
       network: 'online',
     });
   };

@@ -190,7 +190,9 @@ async function raiseConnection(
         link.outcome === "key_lacks_write"
           ? `${toolkit} is not connected, and the Composio API key cannot create a connect link`
           : link.outcome === "no_auth_config"
-            ? `${toolkit} has no auth config in Composio`
+            ? `${toolkit} needs credentials only the Composio dashboard takes`
+            : link.outcome === "no_auth_needed"
+              ? `${toolkit} needs no account; try again`
             : link.outcome === "already_connected"
               ? `${toolkit} is connected but the account list said otherwise; try again`
               : link.message;

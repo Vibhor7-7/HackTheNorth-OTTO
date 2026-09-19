@@ -1,5 +1,16 @@
 import { createFixtures } from './fixtures';
-import type { Approval, ChatMessage, DemoScenario, DemoState, NetworkState, OttoDataSource, OttoEvent, Task, TaskStep } from './types';
+import type { Approval, CatalogEntry, ChatMessage, DemoScenario, DemoState, NetworkState, OttoDataSource, OttoEvent, Task, TaskStep } from './types';
+
+/** A slice of Composio's catalogue for the simulation. Names and slugs are real. */
+const DEMO_CATALOG: CatalogEntry[] = [
+  { slug: 'gmail', name: 'Gmail', description: 'Send and read email.', tool_count: 60, categories: ['email'], auth: 'managed' },
+  { slug: 'googlecalendar', name: 'Google Calendar', description: 'Events and availability.', tool_count: 40, categories: ['calendar'], auth: 'managed' },
+  { slug: 'notion', name: 'Notion', description: 'Pages and databases.', tool_count: 30, categories: ['productivity'], auth: 'managed' },
+  { slug: 'slack', name: 'Slack', description: 'Messages and channels.', tool_count: 50, categories: ['chat'], auth: 'managed' },
+  { slug: 'github', name: 'GitHub', description: 'Issues, pull requests, repos.', tool_count: 100, categories: ['developer'], auth: 'managed' },
+  { slug: 'hackernews', name: 'Hacker News', description: 'Stories and comments.', tool_count: 6, categories: ['news'], auth: 'none' },
+  { slug: 'stripe', name: 'Stripe', description: 'Payments and customers.', tool_count: 80, categories: ['payments'], auth: 'custom' },
+];
 
 type Storage = { getItem(key: string): Promise<string | null>; setItem(key: string, value: string): Promise<void> };
 const STORAGE_KEY = 'otto.frontend.demo.v1';
@@ -155,8 +166,14 @@ export class MockOtto implements OttoDataSource {
   deny = async (id: string) => { this.requireOnline(); this.expire(); const a = this.state.approvals.find(a => a.id === id); if (a?.status === 'pending') this.resolveApproval(a, 'denied'); };
   connect = async (toolkitId: string) => {
     this.requireOnline();
-    const extension = this.state.extensions.find(e => e.id === toolkitId);
-    if (!extension) throw new Error('This toolkit is not part of the demo.');
+    let extension = this.state.extensions.find(e => e.id === toolkitId);
+    if (!extension) {
+      // D-34: adding from the catalogue. The simulation just grows the list.
+      const entry = DEMO_CATALOG.find(e => e.slug === toolkitId);
+      if (!entry) throw new Error('This toolkit is not part of the demo.');
+      extension = { id: entry.slug, name: entry.name, description: entry.description, status: 'needs_auth', tool_count: entry.tool_count };
+      this.publish({ extensions: [...this.state.extensions, extension] });
+    }
     const updated = { ...extension, status: 'connected' as const };
     this.publish({ extensions: this.state.extensions.map(e => e.id === toolkitId ? updated : e) }); this.emit({ type: 'extension.updated', data: updated });
     const pending = this.state.connections.filter(c => c.toolkit === toolkitId && c.status === 'pending');
@@ -257,6 +274,7 @@ export class MockOtto implements OttoDataSource {
   setNetwork = (network: NetworkState) => { this.publish({ network }); };
   refresh = async () => { /* the simulation has nothing to re-read */ };
   setAutoApprove = async (on: boolean) => { this.publish({ autoApprove: on }); };
+  searchCatalog = async (q: string) => { const n = q.trim().toLowerCase(); return DEMO_CATALOG.filter(e => !n || `${e.slug} ${e.name} ${e.categories.join(' ')}`.toLowerCase().includes(n)); };
   setProfileName = async (name: string) => {
     const trimmed = name.trim();
     if (!trimmed) throw new Error('Enter the name you want Otto to use.');

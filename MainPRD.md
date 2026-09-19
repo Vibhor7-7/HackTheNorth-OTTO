@@ -280,7 +280,7 @@ Replaces the former MCP-1 to MCP-5 (D-10). Composio provides three things and we
 | CMP-3 | P0 | **Execution.** `composio/execute.ts` exposes `executeTool(slug, args)` which calls Composio execution for the user, with 30 s timeout, one retry, and structured errors. **Only `approvals/gate.ts` imports this file.** |
 | CMP-4 | P0 | **Connect Link flow.** When execution returns a needs-authentication result, do not fail the task. Create a ConnectionRequest (7.3), set task status `awaiting_connection`, and surface the Connect Link in the app's "Needs you" card (APP-1, APP-7). When the user completes it, retry the exact same tool call once, then continue. This is demo scenario S0. |
 | CMP-5 | P0 | **Risk tiering of Composio tools.** Tier is derived from the tool slug by rule (7.6), with an argument-level override that can raise but never lower. Unknown tools default to R2. Replaces MCP-5. |
-| CMP-6 | P1 | Extensions screen data: list Composio toolkits with connection status for the user (connected / needs_auth / suggested) so APP-4 has real data. |
+| CMP-6 | P1 | Extensions screen data: list Composio toolkits with connection status for the user (connected / needs_auth / suggested) so APP-4 has real data. Names and logos come from the catalogue (D-34); no-auth toolkits the user added are listed as connected. |
 | CMP-7 | P1 | Cache discovery results per goal string for the session so repeated demo runs do not pay the search cost twice. |
 | CMP-8 | P0 | Verify exact SDK method names for search, connect-link creation, and execution against docs.composio.dev before coding CMP-1, CMP-3, CMP-4. Tool Router is beta; pin the package version and do not rely on undocumented behaviour. |
 | CMP-9 | P0 | **Fast-lane allowlist.** `composio/fastlane.ts` exports exactly two Composio tools for the voice agent: Google Calendar free/busy and Google Calendar list events for a date. Both are R0. Each carries a **required `mapArgs`** that translates the 7.4 argument names into the parameters the Composio tool actually accepts, and a `shape` that projects the result down to what a spoken answer needs. `mapArgs` is not optional: Composio **silently ignores** unrecognised parameters, so a mismatch produces a confident answer to a different question rather than an error. Nothing else is added to this file without a Decision (D-28 removed GitHub from it). Measure each against Composio on the demo network; if p95 is over 2 s, remove it from the allowlist and the voice agent falls back to `run_task` for calendar questions with no other change. |
@@ -326,7 +326,7 @@ Expo, iOS target, single user, `APP_API_KEY`. **Four tabs: Home, Context, Connec
 
 | ID | Pri | Requirement |
 |---|---|---|
-| APP-4 | P0 | **Connected tools.** Every Composio toolkit visible to this user (CMP-6): name, icon, status (connected / needs auth / suggested), tool count. **Connect** opens the Connect Link from `POST /api/extensions/:id/connect`. Pull to refresh. Toolkits Otto used recently sort to the top. |
+| APP-4 | P0 | **Connected tools.** Every Composio toolkit visible to this user (CMP-6): name, icon, status (connected / needs auth / suggested), tool count. **Connect** opens the Connect Link from `POST /api/extensions/:id/connect`. Pull to refresh. Toolkits Otto used recently sort to the top. **Add an app** (D-34) opens a search over `GET /api/catalog`; a managed-OAuth toolkit connects from the row, a no-auth toolkit is added on tap, and a custom-auth toolkit says it needs the dashboard. |
 | APP-5 | P0 | **Settings section** at the bottom: device (connected, last seen, state, battery), server URL, `DEMO_MODE` indicator, and a Disconnect action per toolkit, which really removes the connected account. Promoted from P1 because it is how S0 is reset between rehearsals. Also the **auto-approve override** switch (D-33), styled as dangerous, with a banner on every tab while it is on. |
 
 **Chat tab**
@@ -489,7 +489,8 @@ GET    /api/profile        PUT /api/profile
 
 # Connections tab
 GET    /api/extensions                       -> Extension[]                  (CMP-6)
-POST   /api/extensions/:id/connect           -> { link }                     (APP-4)
+GET    /api/catalog?q&limit                  -> CatalogEntry[]               (D-34; Composio's toolkit catalogue, cached server-side)
+POST   /api/extensions/:id/connect           -> { link } | { connected: true } (APP-4; D-34: creates the auth config on demand, `connected` for no-auth toolkits)
 POST   /api/extensions/:id/disconnect        -> { }                          (APP-5, P1)
 GET    /api/device                           -> { connected, state, last_seen, battery? }
 GET    /api/settings                         -> Settings                     (D-33)
@@ -552,6 +553,13 @@ interface Extension {                       // a Composio toolkit as seen by thi
   id: string; name: string; description: string;
   status: "connected" | "needs_auth" | "suggested";
   tool_count: number;
+  logo_url?: string;                        // Composio toolkit metadata (D-34)
+}
+
+interface CatalogEntry {                    // GET /api/catalog (D-34)
+  slug: string; name: string; description: string;
+  logo_url?: string; tool_count: number; categories: string[];
+  auth: "managed" | "none" | "custom";      // managed: connects from the phone; none: no account; custom: dashboard only
 }
 
 interface Turn {
@@ -912,6 +920,7 @@ See D-12. The honest reason: it would not make the hack easier and it would not 
 | **D-29** | **Otto can open pull requests. `GITHUB_CREATE_A_PULL_REQUEST` is R1, not R0.** `GITHUB_LIST_BRANCHES` added so the agent can resolve `head` and `base`. | Asked for as R0. R0 and R1 behave identically - the gate only holds R2 - so R1 delivers the same thing while keeping "R0 = read-only" true, which matters because the app shows the tier on every step and the risk model is the safety story. Opening a PR is reversible by closing it; merging is not, and stays R2. |
 | **D-30** | **An approval suspends the agent loop in place; it is not replayed from the log.** | The held call's arguments are only stored redacted in the TaskStep (DATA-3), so rebuilding the call from the log could send something subtly different from what the user approved - exactly the thing AP-5 exists to prevent. Suspending keeps the real arguments in the closure that hashed them. The cost, stated plainly: a suspended loop lives in memory, so restarting the server with an approval outstanding leaves that task at `awaiting_approval` for good. Acceptable because approvals expire in five minutes and a stuck task is visible on Home rather than silent. Time spent waiting for a human is excluded from the agent's own 3-minute budget, or a task approved after four minutes would die the instant it was allowed to proceed. |
 | **D-31** | **Only a voice-started Task speaks through the device. VG-7 gets the `source` condition it always implied.** | This was never specified either way. VG-7 was written in 1.0, when voice was the only way a Task could exist, so "when a task completes" meant "when a voice task completes" - there was no other kind. CHAT-4 arrived in 1.1 and said where a chat-started Task reports: *"Otto replies 'on it' and the Task appears on Home"*. Nobody re-read VG-7 against it, so chat-started Tasks spoke as well, which no requirement ever asked for and CHAT-4 and D-22 both point away from. Left alone it also bites on stage: queued speech only drains on the next voice turn, so a Task started by text while rehearsing surfaces mid-sentence during the live voice demo. Otto answers where it was asked - app for chat and action items, earpiece for voice. Cost, stated plainly: ask by text while wearing the device and you look at your phone for the answer, which is what the reply already tells you to do. |
+| **D-34** | **Toolkits are added from the app, not the dashboard.** `GET /api/catalog` serves Composio's catalogue; `POST /api/extensions/:id/connect` creates a Composio-managed auth config on demand before making the Connect Link; no-auth toolkits are enabled in a local table. | Every "add a tool" path used to end at platform.composio.dev, which is the wrong surface for a phone. Verified against @composio/core 0.18.1: `toolkits.get` returns ~1,550 toolkits in under a second (no server-side search, page cursor is a page number), `authConfigs.create(slug, { type: "use_composio_managed_auth" })` needs nothing from the user for the 48% of top toolkits Composio manages, and refuses a config for no-auth toolkits ("does not require authentication"), so those are recorded in `enabled_toolkits` and offered to discovery from there. Custom-auth toolkits (API keys) still need the dashboard once: taking keys through this server is a scope the demo does not need. Everything an added toolkit does still passes the gate; uncurated tools tier by the 7.6 rules, unknown ones to R2. |
 | **D-33** | **An in-app "skip all approvals" override, in memory only.** `PUT /api/settings`, `settings.updated`, a Settings switch and a banner on every tab. | Asked for so a run can go end to end without tapping. It is the opposite of the product's thesis (AP-1, D-3), so the design makes it impossible to forget: it resets on server restart, every auto-approved call is logged at WARN, and the app shows an undismissable red banner on every tab while it is on. The Approval record and the `approval_wait` step are still written, worded "auto-approved", so Task detail never implies a human confirmed. It was not made persistent for the same reason `DEV_TIER_OVERRIDES` is env-only: a forgotten switch removes S0's second beat and all of S2. Must be off for any rehearsal or demo. |
 | **D-32** | **A seventh Realtime tool, `list_capabilities`, tells the voice model what Otto can and cannot do right now.** 7.4 goes to seven tools. | The model was guessing at its own reach in both directions: promising things no connected toolkit could do, and declining things it could. The honest answer depends on which Composio accounts are ACTIVE at that moment, which only the server knows. Baking the list into the instructions at session start was considered and rejected because a toolkit connected mid-session (S0's whole point) would not be reflected until the next session. The tool reads a cache that the gateway warms at session open and refreshes on every `extension.updated`, so the voice path still performs no retrieval (VG-10) and the call costs one function round trip only when the model chooses it. The phrases come mechanically from the curated tool slugs, so the list cannot claim more than the agent has loaded. |
 
@@ -1009,6 +1018,12 @@ Judge check-ins: OpenAI, Composio and Expo booths early, and once more after sta
 
 ## 17. Changelog
 
+- **1.9.5**: **Section 7 changed:** `GET /api/catalog`, `CatalogEntry`, and
+  `Extension.logo_url` added; `POST /api/extensions/:id/connect` may answer
+  `{ connected: true }` for a no-auth toolkit (D-34). Toolkits are added from
+  the app: managed-OAuth auth configs are created on demand, no-auth toolkits
+  are enabled locally, custom-auth ones still point at the dashboard. APP-4 and
+  CMP-6 updated.
 - **1.9.4**: **Section 7 changed:** auto-approve override added (D-33): `GET`/`PUT
   /api/settings`, `Settings` type, `settings.updated` SSE event, and a 7.6 note. The
   gate approves R2 instantly while it is on, records it as auto-approved, and the

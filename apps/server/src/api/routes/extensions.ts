@@ -6,6 +6,7 @@ import type { Extension } from "@otto/shared";
 import { deviceStatus } from "../../gateway/device";
 import { listExtensions, publishExtensionStatus } from "../../composio/extensions";
 import { createConnectLink, disconnectToolkit } from "../../composio/connect";
+import { searchCatalog } from "../../composio/catalog";
 
 export function extensionRoutes(app: FastifyInstance): void {
   app.get("/api/extensions", async (): Promise<Extension[]> => listExtensions());
@@ -13,6 +14,11 @@ export function extensionRoutes(app: FastifyInstance): void {
   app.post<{ Params: { id: string } }>("/api/extensions/:id/connect", async (req, reply) => {
     const result = await createConnectLink(req.params.id);
     if (result.outcome === "ok") return { link: result.link };
+    if (result.outcome === "no_auth_needed") {
+      // D-34: nothing to sign in to; the toolkit is usable now.
+      void publishExtensionStatus(result.toolkit);
+      return { connected: true };
+    }
     if (result.outcome === "already_connected") {
       // The app's list was stale; correct it over SSE and say so plainly.
       void publishExtensionStatus(result.toolkit);
@@ -25,7 +31,7 @@ export function extensionRoutes(app: FastifyInstance): void {
       result.outcome === "key_lacks_write"
         ? "the Composio API key needs connected_accounts write access (CMP-2)"
         : result.outcome === "no_auth_config"
-          ? `no Composio auth config for ${result.toolkit}; create one in the dashboard`
+          ? `${result.toolkit} needs credentials only the Composio dashboard takes; set it up there once`
           : result.message;
     return reply.code(status).send({ error });
   });
@@ -43,4 +49,13 @@ export function extensionRoutes(app: FastifyInstance): void {
   });
 
   app.get("/api/device", async () => deviceStatus());
+
+  // D-34: browse the catalogue. Cached server-side; `q` matches name, slug, category.
+  app.get<{ Querystring: { q?: string; limit?: string } }>("/api/catalog", async (req, reply) => {
+    try {
+      return await searchCatalog(req.query.q ?? "", req.query.limit ? Number(req.query.limit) : 30);
+    } catch (err) {
+      return reply.code(502).send({ error: err instanceof Error ? err.message : "catalog unavailable" });
+    }
+  });
 }

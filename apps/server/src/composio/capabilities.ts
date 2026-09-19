@@ -13,6 +13,7 @@ import { activeToolkitSlugs, composioConfigured, log } from "./client";
 import { CURATED_TOOLS } from "./toolkits";
 import { fastLaneAvailable } from "./fastlane";
 import { subscribe } from "../bus";
+import { enabledToolkitSlugs } from "../store";
 
 let connected = new Set<string>();
 let refreshedAt = 0;
@@ -24,7 +25,7 @@ export function refreshCapabilities(): Promise<void> {
   inflight = (async () => {
     if (!composioConfigured()) { connected = new Set(); return; }
     try {
-      connected = await activeToolkitSlugs();
+      connected = new Set([...(await activeToolkitSlugs()), ...enabledToolkitSlugs()]);
       refreshedAt = Date.now();
     } catch (err) {
       log.warn("capability refresh failed; keeping the last answer", {
@@ -43,9 +44,13 @@ subscribe((ev) => {
 /** The tool's answer. Synchronous: it reads the cache and nothing else. */
 export function capabilitySummary(): ListCapabilitiesResult {
   const known = Object.keys(CURATED_TOOLS);
-  const can = known
-    .filter((slug) => connected.has(slug))
-    .map((slug) => ({ toolkit: slug, actions: phrases(slug) }));
+  const can = [...connected]
+    .map((slug) => ({
+      toolkit: slug,
+      actions: known.includes(slug)
+        ? phrases(slug)
+        : ["its common read and write actions, chosen when the task runs"],
+    }));
   const needs_connection = known.filter((slug) => !connected.has(slug));
 
   return {

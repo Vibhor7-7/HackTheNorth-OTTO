@@ -23,6 +23,7 @@ import {
 } from "../../src/ui";
 import { colors as c } from "../../src/theme";
 import { isLive, otto } from "../../src/data/source";
+import { CatalogSheet } from "../../src/catalog-sheet";
 import {
   CustomMcp,
   loadCustomMcp,
@@ -35,7 +36,7 @@ export default function ConnectionsScreen() {
   const insets = useSafeAreaInsets();
   const [refreshing, setRefreshing] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
-  const [sheet, setSheet] = useState<"mcp" | "tools" | null>(null);
+  const [sheet, setSheet] = useState<"catalog" | "mcp" | "tools" | null>(null);
   const [mcps, setMcps] = useState<CustomMcp[]>([]);
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
@@ -131,6 +132,13 @@ export default function ConnectionsScreen() {
               </View>
             </View>
           ))}
+        <View style={{ marginBottom: 14 }}>
+          <Button
+            label="Add an app"
+            icon="plus"
+            onPress={() => setSheet("catalog")}
+          />
+        </View>
         <Section title="Connected" aside={String(connected.length)} />
         <View style={s.group}>
           {connected.map((tool, i) => (
@@ -341,9 +349,11 @@ export default function ConnectionsScreen() {
                 }}
               >
                 <Copy style={{ fontSize: 24, fontWeight: "700", flex: 1 }}>
-                  {sheet === "mcp"
-                    ? "Add MCP server"
-                    : "Tools when you need them"}
+                  {sheet === "catalog"
+                    ? "Add an app"
+                    : sheet === "mcp"
+                      ? "Add MCP server"
+                      : "Tools when you need them"}
                 </Copy>
                 <Pressable
                   accessibilityRole="button"
@@ -359,7 +369,9 @@ export default function ConnectionsScreen() {
                   <Feather name="x" size={24} color={c.text} />
                 </Pressable>
               </View>
-              {sheet === "mcp" ? (
+              {sheet === "catalog" ? (
+                <CatalogSheet />
+              ) : sheet === "mcp" ? (
                 <>
                   <Copy style={{ marginBottom: 8 }}>Name</Copy>
                   <TextInput
