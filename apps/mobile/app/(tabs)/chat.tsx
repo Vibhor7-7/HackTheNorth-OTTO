@@ -33,7 +33,7 @@ import {
 import { GlassChrome } from "../../src/glass";
 import { ConversationScene } from "../../src/visuals/ConversationScene";
 import { colors as c, fonts } from "../../src/theme";
-import { otto } from "../../src/data/mock";
+import { otto } from "../../src/data/source";
 
 const starters = [
   "What did I do today?",

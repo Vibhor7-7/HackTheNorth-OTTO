@@ -7,7 +7,7 @@ import { Feather } from "@expo/vector-icons";
 import { Button, Copy, Header, Section, s, useOtto } from "../../src/ui";
 import { GlassChrome } from "../../src/glass";
 import { colors as c, fonts } from "../../src/theme";
-import { otto } from "../../src/data/mock";
+import { otto } from "../../src/data/source";
 export default function ContextScreen() {
   const state = useOtto();
   const router = useRouter();

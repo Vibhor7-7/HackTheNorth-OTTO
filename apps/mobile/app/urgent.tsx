@@ -14,7 +14,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { Button, Copy, Header, NetworkBanner, s, useOtto } from "../src/ui";
 import { colors as c } from "../src/theme";
-import { otto } from "../src/data/mock";
+import { otto } from "../src/data/source";
 import {
   decideApproval,
   sendApprovalReply,

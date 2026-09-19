@@ -14,6 +14,7 @@ import {
   addStep, createTask, getTask, latestTask, updateTask, findByTaskId, updateActionItem,
 } from "../store";
 import { speak } from "./notify";
+import { settleAnswer, taskAwaitingAnswer } from "../approvals/pending";
 import { runLoop } from "./loop";
 import { logger } from "../log";
 
@@ -75,13 +76,20 @@ export function startFastLaneTask(toolName: string, args: unknown): string {
 }
 
 /** AG-6: a running task's question is answered by the next voice turn. */
-export function answerQuestion(taskId: string, answer: string): { ok: true } {
-  const task = getTask(taskId);
-  if (!task) return { ok: true };
-  addStep({ task_id: taskId, kind: "question", summary: `User answered: ${answer}` });
-  log.child({ task_id: taskId }).info("answer received", { answer });
-  // [TODO AG-6] resume the suspended loop with this answer.
-  return { ok: true };
+/**
+ * AG-6. Resumes a task that asked a question. `task_id` may be omitted by the voice
+ * model - people answer the question they were just asked, not one identified by
+ * id - in which case the single task waiting on an answer is used.
+ */
+export function answerQuestion(taskId: string | undefined, answer: string): { ok: boolean } {
+  const target = taskId && getTask(taskId) ? taskId : taskAwaitingAnswer();
+  if (!target) {
+    log.warn("answer with no question outstanding", { answer });
+    return { ok: false };
+  }
+  const ok = settleAnswer(target, answer);
+  log.child({ task_id: target }).info("answer received", { answer, resumed: ok });
+  return { ok };
 }
 
 export function taskStatus(taskId?: string): { status: TaskStatus | "unknown"; spoken_summary?: string } {

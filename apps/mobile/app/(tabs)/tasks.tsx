@@ -22,7 +22,7 @@ import {
   useOtto,
 } from "../../src/ui";
 import { colors as c } from "../../src/theme";
-import { otto } from "../../src/data/mock";
+import { otto } from "../../src/data/source";
 import type { Task } from "../../src/data/types";
 
 const labels: Record<Task["status"], string> = {

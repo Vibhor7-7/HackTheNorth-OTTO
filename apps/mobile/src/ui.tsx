@@ -13,7 +13,7 @@ import Animated, { FadeInDown, ReduceMotion } from "react-native-reanimated";
 import { Feather } from "@expo/vector-icons";
 import { colors as c, fonts, motion } from "./theme";
 import { GlassChrome } from "./glass";
-import { otto } from "./data/mock";
+import { otto } from "./data/source";
 import { router } from "expo-router";
 import { OttoLogo } from "./OttoLogo";
 import { BrandMark } from "./brand-marks";

@@ -15,7 +15,7 @@ import {
   useOtto,
   s,
 } from "../../src/ui";
-import { otto } from "../../src/data/mock";
+import { otto } from "../../src/data/source";
 
 export default function ConnectScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();

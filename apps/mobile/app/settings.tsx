@@ -5,7 +5,7 @@ import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Button, Copy, Header, Section, s, useOtto } from "../src/ui";
 import { colors as c } from "../src/theme";
-import { otto } from "../src/data/mock";
+import { otto } from "../src/data/source";
 import type { DemoScenario, NetworkState } from "../src/data/types";
 const scenarios: { id: DemoScenario; label: string }[] = [
   { id: "default", label: "A day with Otto" },

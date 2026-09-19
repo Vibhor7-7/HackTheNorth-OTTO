@@ -6,7 +6,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { Appearance } from "react-native";
 import { colors as c } from "../src/theme";
-import { otto } from "../src/data/mock";
+import { otto } from "../src/data/source";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { LaunchScreen } from "../src/LaunchScreen";
 import { demoProfile } from "../src/demo-profile";

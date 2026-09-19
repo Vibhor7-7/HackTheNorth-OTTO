@@ -22,7 +22,11 @@ has a stable ID (`VG-4`, `AG-7`, `CMP-9`) and Section 7 is a binding contract.
 ```sh
 pnpm install
 pnpm dev             # server on :3000 (REST + SSE + device WS on one port)
-pnpm dev:mobile      # Expo app (apps/mobile uses npm, not pnpm - see pnpm-workspace.yaml)
+pnpm dev:mobile      # Expo app against the mock (apps/mobile uses npm, not pnpm)
+
+# the app against the real server - use the LAN address, not localhost:
+#   cd apps/mobile && EXPO_PUBLIC_OTTO_URL=http://192.168.1.20:3000 \
+#     EXPO_PUBLIC_OTTO_KEY=dev-app-key npm start
 pnpm fake-device     # DEV-1: laptop mic speaks the device protocol (needs ffmpeg)
 pnpm typecheck       # every package
 pnpm whatsapp        # WhatsApp setup + smoke test (status|connect|numbers|send|disconnect)
@@ -48,10 +52,19 @@ apps/server/src/
   chat/       context agent for the Chat tab        CHAT-*
   api/        REST + SSE (7.2)
   store/      schema + queries                      DATA-*
-packages/shared/   TS types for Section 7, imported by server and mobile
+packages/shared/   TS types for Section 7, imported by the server
+                   (apps/mobile keeps its own hand-synced copy in src/data/types.ts,
+                    because it is outside the pnpm workspace)
 tools/fake-device/ DEV-1
 htn-voice/         Friday spike, reference only - not wired into the build
 ```
+
+## The app talks to the server through one seam
+
+`apps/mobile/src/data/OttoDataSource` is the only contract the screens know.
+`MockOtto` is the local simulation, `HttpOtto` is 7.2 plus the SSE feed, and
+`src/data/source.ts` chooses between them from `EXPO_PUBLIC_OTTO_URL`. Never let a
+screen fetch directly: the mock is also the stage fallback if the server dies.
 
 ## Invariants you must not break
 

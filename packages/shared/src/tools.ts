@@ -19,7 +19,7 @@ export interface RealtimeFunctionTool {
 export interface RunTaskArgs { goal: string; context?: string }
 export interface RunTaskResult { task_id: string; status: "started" }
 
-export interface AnswerQuestionArgs { task_id: string; answer: string }
+export interface AnswerQuestionArgs { task_id?: string; answer: string }
 export interface GetTaskStatusArgs { task_id?: string }
 export interface GetTaskStatusResult { status: string; spoken_summary?: string }
 export interface CancelTaskArgs { task_id?: string }
@@ -59,14 +59,16 @@ export const CONTROL_TOOLS: RealtimeFunctionTool[] = [
   {
     type: "function",
     name: "answer_question",
-    description: "Give a running task the answer to a question it asked the user.",
+    description:
+      "Give a running task the answer to a question it asked. Omit task_id to answer " +
+      "the question that was just asked, which is almost always what you want.",
     parameters: {
       type: "object",
       properties: {
-        task_id: { type: "string", description: "The task that asked the question." },
+        task_id: { type: "string", description: "Only if answering an older question." },
         answer: { type: "string", description: "The user's answer, verbatim." },
       },
-      required: ["task_id", "answer"],
+      required: ["answer"],
       additionalProperties: false,
     },
   },

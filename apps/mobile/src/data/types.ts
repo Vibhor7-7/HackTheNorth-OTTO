@@ -12,7 +12,7 @@ export interface Memory { id: string; text: string; source: 'user' | 'task_summa
 export interface ChatMessage { id: string; role: 'user' | 'assistant'; text: string; citations?: { kind: 'turn' | 'task'; id: string }[]; created_at: string }
 export interface ChatSession { id: string; title: string; messages: ChatMessage[]; created_at: string; updated_at: string }
 export interface HomePayload { approvals: Approval[]; connections: ConnectionRequest[]; action_items: ActionItem[]; recent_tasks: Task[] }
-export interface Device { connected: boolean; state: string; last_seen: string; battery?: number }
+export interface Device { connected: boolean; state: string; last_seen?: string; battery?: number; fw?: string }
 type EventMap = { 'task.created': Task; 'task.updated': Task; 'step.created': TaskStep; 'approval.created': Approval; 'approval.updated': Approval; 'connection.created': ConnectionRequest; 'connection.updated': ConnectionRequest; 'action_item.created': ActionItem; 'action_item.updated': ActionItem; 'memory.created': Memory; 'device.updated': Device; 'extension.updated': Extension };
 export type OttoEvent = { [K in keyof EventMap]: { type: K; data: EventMap[K] } }[keyof EventMap];
 export type NetworkState = 'online' | 'offline' | 'reconnecting';

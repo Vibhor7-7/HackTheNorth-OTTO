@@ -9,6 +9,7 @@ import { env } from "../env";
 import { logger } from "../log";
 import { addStep, getProfile, recallMemories, updateTask, createMemory } from "../store";
 import { gate } from "../approvals/gate";
+import { waitForAnswer } from "../approvals/pending";
 import { discover } from "../composio/discover";
 import { ASK_TOOL, FINISH_TOOL, toolSchemas, type ResponsesTool } from "./tools";
 import { systemPrompt } from "./prompt";
@@ -132,7 +133,21 @@ export async function runLoop(taskId: string, goal: string, context?: string): P
         updateTask(taskId, { status: "needs_input", spoken_summary: question });
         speak({ text: question, reason: "needs_input", task_id: taskId });
         tlog.info("asked the user", { question });
-        return { status: "needs_input", spoken_summary: question };
+
+        // AG-6: suspend rather than end. The answer arrives from the next voice
+        // turn or from the app, and the loop carries on with it in hand.
+        const askedAt = Date.now();
+        const answer = await waitForAnswer(taskId);
+        waitedMs += Date.now() - askedAt;
+        addStep({ task_id: taskId, kind: "question", summary: `You answered: ${answer}` });
+        updateTask(taskId, { status: "running" });
+
+        input.push({
+          type: "function_call_output",
+          call_id: callId,
+          output: safeJson({ answer }),
+        });
+        continue;
       }
 
       calls++;

@@ -15,7 +15,7 @@ import {
   useOtto,
 } from "../../src/ui";
 import { colors as c } from "../../src/theme";
-import { otto } from "../../src/data/mock";
+import { otto } from "../../src/data/source";
 import type { Task, TaskStep } from "../../src/data/types";
 import { FactDetails, TaskJourney } from "../../src/task-journey";
 

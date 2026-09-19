@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | Event | Hack the North 2026 |
-| Spec version | 1.7.2 (supersedes 1.7.1) |
+| Spec version | 1.8.0 (supersedes 1.7.2) |
 | Product name | **Otto.** The device, the agent, and the app are all Otto. Use the name in the system prompt, the app, and the pitch. |
 | Status | **Final for build.** Open decisions in Section 13 only. |
 | Tracks | OpenAI API Prizes, Composio, Expo (primary). Rox (natural fit, no extra work). Shopify: cut (D-25). Elastic: cut (D-12). |
@@ -261,7 +261,7 @@ Verify event names against current Realtime docs before coding. Names changed be
 | AG-3 | P0 | **Every** tool call passes through AP-1 before execution. The agent module has no import of `composio.tools.execute`; only `approvals/gate.ts` does. |
 | AG-4 | P0 | Every step (plan, tool_call, tool_result, approval_wait, connection_wait, question, final, error) is a TaskStep (7.3) and is emitted on SSE. |
 | AG-5 | P0 | On completion produce `spoken_summary` (under 25 words, for the device) and `detail_md` (markdown, for the app). |
-| AG-6 | P0 | Missing information: set status `needs_input`, speak the question via VG-7, resume when the next voice turn answers via `answer_question` (7.4). |
+| AG-6 | P0 | Missing information: set status `needs_input`, speak the question via VG-7, and **suspend the loop** until an answer arrives - from the next voice turn via `answer_question` (7.4) or from the app via `POST /api/tasks/:id/answer`. `task_id` is optional on the voice tool: people answer the question they were just asked, so the single task awaiting an answer is used when it is omitted. Same suspension model and memory-only caveat as AP-4 (D-30). |
 | AG-7 | P0 | **Tool discovery is Composio's.** For each task: call Composio tool search with the goal (CMP-1), load only the returned tools into the loop, and write a `plan` step naming which toolkits were selected and why. This is the "agent finds its own tools" story and it is now P0 because Composio makes it cheap. |
 | AG-8 | P1 | Memory: inject user profile and the three most relevant past task summaries (DATA-4) into the agent system prompt. Agent path only, never the voice path. |
 | AG-9 | P0 | **Messy data handling.** When tool results conflict or are incomplete (two contacts named Sam, ambiguous timezone, missing email, a transcript that mangled a proper noun), the agent states the ambiguity and either resolves it from profile context or asks (AG-6). It never guesses silently on an R1 or R2 action. Promoted to P0 because it is the S1 demo beat and the Rox rubric. |
@@ -467,6 +467,7 @@ GET    /api/home                             -> { approvals, connections, action
 # Tasks
 GET    /api/tasks?limit&before               -> Task[]
 GET    /api/tasks/:id                        -> Task & { steps, approval?, connection_request? }
+POST   /api/tasks/:id/answer                 -> { answer } -> { ok }        (AG-6 from the app)
 
 # Approvals and connections
 GET    /api/approvals?status=pending         -> Approval[]
@@ -981,6 +982,12 @@ Judge check-ins: OpenAI, Composio and Expo booths early, and once more after sta
 
 ## 17. Changelog
 
+- **1.8.0**: AG-6 implemented - a task that asks a question now suspends and resumes
+  with the answer, from voice or from the app, instead of dropping it.
+  `POST /api/tasks/:id/answer` added to 7.2; `answer_question`'s `task_id` is now
+  optional in 7.4. The mobile app is wired to the server: `apps/mobile/src/data/http.ts`
+  implements the same `OttoDataSource` the mock does, over 7.2 plus the SSE feed, and
+  `src/data/source.ts` picks live or simulated from `EXPO_PUBLIC_OTTO_URL`.
 - **1.7.2**: Fixed both fast-lane tools, which were answering the wrong question.
   The 7.4 argument names were never mapped to the parameters the Composio tools
   accept, and Composio ignores unrecognised parameters silently:

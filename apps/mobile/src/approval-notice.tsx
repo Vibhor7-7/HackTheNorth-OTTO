@@ -14,7 +14,7 @@ import * as Haptics from "expo-haptics";
 import { GlassChrome } from "./glass";
 import { Button, Copy, useOtto } from "./ui";
 import { colors as c } from "./theme";
-import { otto } from "./data/mock";
+import { otto } from "./data/source";
 import { decideApproval, timeRemaining } from "./data/approval-channel";
 
 // A notice is an arrival, not a second persistent approval inbox.

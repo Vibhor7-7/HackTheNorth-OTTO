@@ -15,7 +15,7 @@ import {
   s,
 } from "../../src/ui";
 import { TaskJourney } from "../../src/task-journey";
-import { otto } from "../../src/data/mock";
+import { otto } from "../../src/data/source";
 
 export default function ApprovalScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();

@@ -34,7 +34,7 @@ import {
 import { TaskJourney } from "../../src/task-journey";
 import { DevicesTile } from "../../src/devices";
 import { SignalScene } from "../../src/visuals/SignalScene";
-import { otto } from "../../src/data/mock";
+import { otto } from "../../src/data/source";
 import type { HomePayload } from "../../src/data/types";
 
 export default function Home() {

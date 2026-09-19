@@ -55,3 +55,41 @@ export function settleDecision(approvalId: string, decision: Decision): boolean 
 }
 
 export const pendingCount = () => waiters.size;
+
+// ---- AG-6: the same idea for a question the agent asked --------------------
+//
+// A task that asked "which Sam?" suspends in the loop exactly as an R2 does, and
+// the next voice turn or an app reply resumes it. Same memory-only caveat (D-30).
+
+interface Asker {
+  task_id: string;
+  settle: (answer: string) => void;
+}
+
+const askers = new Map<string, Asker>();
+
+export function waitForAnswer(taskId: string): Promise<string> {
+  return new Promise<string>((resolve) => {
+    // One outstanding question per task; a second replaces the first.
+    askers.set(taskId, { task_id: taskId, settle: resolve });
+  });
+}
+
+/** Returns false when that task was not waiting on an answer. */
+export function settleAnswer(taskId: string, answer: string): boolean {
+  const asker = askers.get(taskId);
+  if (!asker) {
+    log.warn("answer for a task that asked nothing", { task_id: taskId });
+    return false;
+  }
+  askers.delete(taskId);
+  log.info("resuming task with an answer", { task_id: taskId });
+  asker.settle(answer);
+  return true;
+}
+
+/** The task currently waiting on an answer, if exactly one is. */
+export function taskAwaitingAnswer(): string | undefined {
+  const ids = [...askers.keys()];
+  return ids.length === 1 ? ids[0] : undefined;
+}
