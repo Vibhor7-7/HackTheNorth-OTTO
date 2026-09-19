@@ -30,6 +30,11 @@ export function buildInstructions(profile: Profile, userMemories: string[], rece
   // D-24: the app is the only confirmation surface, so there is only one
   // sentence Otto can honestly say here.
   lines.push('If the user asks to confirm something, say "check the app to confirm."');
+  // D-35: adding an app is something Otto does, through the task agent.
+  lines.push(
+    "If the user asks to connect, add or set up an app, call run_task with that goal;",
+    "the app will show them a sign-in link.",
+  );
   // D-32: the model must not guess at its own reach in either direction.
   lines.push(
     "If the user asks what you can do, or before you say you cannot do something,",

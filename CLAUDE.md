@@ -97,9 +97,9 @@ screen fetch directly: the mock is also the stage fallback if the server dies.
 
 ## Unfinished seams
 
-Grep for `[TODO` - each one names the requirement IDs that finish it:
-`AP-4` (resuming a task once its approval is decided - the gate holds the call and
-its `args_hash`, nothing releases it yet), `AG-6` (resuming a `needs_input` task
-from the next voice turn), `ACT-1` (extraction), `CHAT-1` (the context agent).
-Composio (CMP-1, CMP-3, CMP-4, CMP-6) and the agent loop (AG-2, AG-5, AG-7, AG-9)
-are wired and verified end to end from voice.
+Grep for `[TODO` - each one names the requirement IDs that finish it.
+Approvals (AP-4) and connections (CMP-4, D-35) both resume a suspended loop in
+place; a server restart strands whichever task was waiting. Toolkits are added
+from the app's catalogue (D-34): managed OAuth configs are created on demand,
+no-auth toolkits live in `enabled_toolkits`, API-key toolkits still need the
+Composio dashboard once.

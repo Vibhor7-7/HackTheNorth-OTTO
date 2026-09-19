@@ -9,6 +9,7 @@ import {
   completeConnectionRequest, findPendingByToolkit, getConnectionRequest,
 } from "../../store";
 import { publishExtensionStatus } from "../../composio/extensions";
+import { settleConnection } from "../../approvals/pendingConnections";
 import { logger } from "../../log";
 
 const log = logger("connect");
@@ -30,7 +31,8 @@ export function connectCallbackRoutes(app: FastifyInstance): void {
         log.info("connection completed via callback", { task_id: cr.task_id, toolkit: cr.toolkit });
         // The toolkit is connected now; say so, so the card resolves itself (APP-7).
         void publishExtensionStatus(cr.toolkit);
-        // [TODO CMP-4] Retry the exact same tool call once, then continue.
+        // CMP-4: the suspended task retries its call now.
+        settleConnection(cr.id, "completed");
       } else {
         log.warn("callback matched no pending connection request", { request_id, toolkit });
       }

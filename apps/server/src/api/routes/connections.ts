@@ -6,6 +6,7 @@ import {
   completeConnectionRequest, getConnectionRequest, listConnectionRequests,
 } from "../../store";
 import { publishExtensionStatus } from "../../composio/extensions";
+import { settleConnection } from "../../approvals/pendingConnections";
 import { logger } from "../../log";
 
 const log = logger("api.connections");
@@ -24,7 +25,9 @@ export function connectionRoutes(app: FastifyInstance): void {
     log.info("connection completed from app", { task_id: existing.task_id, toolkit: existing.toolkit });
     void publishExtensionStatus(existing.toolkit);
 
-    // [TODO CMP-4] Retry the exact same tool call once, then continue the task.
-    return done ?? existing;
+    // CMP-4: the suspended task retries its call now. `resumed` is false when
+    // nothing was waiting (the server restarted), so the app can say so.
+    const resumed = settleConnection(existing.id, "completed");
+    return { ...(done ?? existing), resumed };
   });
 }

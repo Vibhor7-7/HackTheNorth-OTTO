@@ -24,6 +24,7 @@
 import { activeToolkitSlugs, composio, items, log } from "./client";
 import { CURATED_TOOLS, rankUncuratedTools } from "./toolkits";
 import { enabledToolkitSlugs } from "../store";
+import { catalog } from "./catalog";
 
 export interface DiscoveredToolkit {
   slug: string;
@@ -50,10 +51,16 @@ export async function discover(goal: string, max = 2): Promise<Discovery> {
   const available = await availableToolkits();
   const hinted = await searchHint(goal);
 
+  // D-35: an app the goal names by name is a candidate even with nothing set up.
+  // The gate creates the auth config and raises the Connect Link when a tool of
+  // it is first called, so "save this to Notion" works from zero.
+  const named = await catalogMatches(goal, new Set(available.map((t) => t.slug)));
+  for (const c of named) available.push({ slug: c.slug, name: c.name, connected: false });
+
   // Score each available toolkit against the goal. A search hit is strong
   // evidence; a curated keyword match is the reliable fallback.
   const scored = available
-    .map((tk) => ({ ...tk, score: scoreToolkit(tk.slug, goal, hinted) }))
+    .map((tk) => ({ ...tk, score: scoreToolkit(tk.slug, goal, hinted) + (named.some((c) => c.slug === tk.slug) ? 6 : 0) }))
     .filter((tk) => tk.score > 0)
     .sort((a, b) => b.score - a.score || Number(b.connected) - Number(a.connected));
 
@@ -150,6 +157,29 @@ const keywordQuery = (goal: string): string => {
   const words = new Set(goal.toLowerCase().match(/[a-z]{3,}/g) ?? []);
   return SEARCH_TERMS.filter((t) => words.has(t)).slice(0, 3).join(" ");
 };
+
+/**
+ * Catalogue toolkits whose name or slug appears in the goal, and which the app can
+ * actually connect (managed OAuth or no auth). At most three; the catalogue is
+ * ordered by usage so the popular one wins a tie.
+ */
+async function catalogMatches(goal: string, skip: Set<string>): Promise<{ slug: string; name: string }[]> {
+  const words = new Set(goal.toLowerCase().match(/[a-z0-9]{3,}/g) ?? []);
+  if (!words.size) return [];
+  try {
+    const all = await catalog();
+    return all
+      .filter((e) => !skip.has(e.slug) && (e.auth === "managed" || e.auth === "none"))
+      .filter((e) => {
+        const tokens = new Set([e.slug, ...e.name.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length >= 3)]);
+        return [...tokens].some((t) => words.has(t));
+      })
+      .slice(0, 3)
+      .map((e) => ({ slug: e.slug, name: e.name }));
+  } catch {
+    return [];
+  }
+}
 
 /** Words in the goal that point at a toolkit we know about. */
 const TOOLKIT_HINTS: Record<string, string[]> = {

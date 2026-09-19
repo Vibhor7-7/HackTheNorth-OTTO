@@ -14,7 +14,9 @@ import { classify, toolkitOf } from "./tiers";
 import { waitForDecision, type Decision } from "./pending";
 import { executeTool, isToolkitConnected } from "../composio/execute";
 import { createConnectLink } from "../composio/connect";
+import { publishExtensionStatus } from "../composio/extensions";
 import { isAutoApprove } from "./override";
+import { waitForConnection } from "./pendingConnections";
 import { speak } from "../agent/notify";
 import { logger } from "../log";
 
@@ -138,6 +140,8 @@ async function runNow(
   risk: RiskTier,
   toolkit: string,
   stepId: string,
+  /** Set on the post-connection retry: a second needs_connection is reported, not re-raised. */
+  isRetry = false,
 ): Promise<GateResult> {
   const started = Date.now();
   const result = await executeTool(req.slug, req.args, toolkit);
@@ -161,6 +165,7 @@ async function runNow(
   // CMP-4: a missing connection is not a failure. Raise a ConnectionRequest and
   // let the task wait for the user to connect. This is S0.
   if (result.outcome === "needs_connection") {
+    if (isRetry) return { outcome: "needs_connection", risk, toolkit, connection_id: "" };
     return raiseConnection(req, risk, toolkit, stepId, duration_ms);
   }
 
@@ -185,14 +190,18 @@ async function raiseConnection(
 ): Promise<GateResult> {
   {
     const link = await createConnectLink(toolkit);
+    // D-34: a no-auth toolkit was just enabled; there is nothing to wait for.
+    if (link.outcome === "no_auth_needed") {
+      addStep({ task_id: req.task_id, kind: "connection_wait", toolkit, tool_slug: req.slug, risk,
+        summary: `${toolkit} needs no account; added it.`, duration_ms });
+      return runNow(req, risk, toolkit, stepId);
+    }
     if (link.outcome !== "ok") {
       const message =
         link.outcome === "key_lacks_write"
           ? `${toolkit} is not connected, and the Composio API key cannot create a connect link`
           : link.outcome === "no_auth_config"
             ? `${toolkit} needs credentials only the Composio dashboard takes`
-            : link.outcome === "no_auth_needed"
-              ? `${toolkit} needs no account; try again`
             : link.outcome === "already_connected"
               ? `${toolkit} is connected but the account list said otherwise; try again`
               : link.message;
@@ -222,7 +231,29 @@ async function raiseConnection(
       task_id: req.task_id,
     });
     log.info("awaiting connection", { task_id: req.task_id, toolkit, connection: cr.id });
-    return { outcome: "needs_connection", risk, toolkit, connection_id: cr.id };
+
+    // CMP-4 / D-35: suspend here until the link completes, then retry the exact
+    // same call once. The arguments never left this closure.
+    const outcome = await waitForConnection(cr.id, req.task_id);
+    if (outcome !== "completed") {
+      addStep({ task_id: req.task_id, kind: "final", toolkit, tool_slug: req.slug, risk,
+        summary: `The ${toolkit} connection was not completed in time, so nothing was done.` });
+      return { outcome: "error", risk, message: `${toolkit} was not connected in time` };
+    }
+    addStep({ task_id: req.task_id, kind: "connection_wait", toolkit, tool_slug: req.slug, risk,
+      summary: `Connected to ${toolkit}. Retrying.` });
+    updateTask(req.task_id, { status: "running" });
+    // The capability cache and the app's list both key off this.
+    void publishExtensionStatus(toolkit);
+
+    const retry = await runNow(req, risk, toolkit, stepId, true);
+    if (retry.outcome === "needs_connection") {
+      // Composio still says no account: do not loop on the user.
+      addStep({ task_id: req.task_id, kind: "error", toolkit, tool_slug: req.slug, risk,
+        summary: `${toolkit} still reports no usable account after connecting.` });
+      return { outcome: "error", risk, message: `${toolkit} still reports no usable account after connecting` };
+    }
+    return retry;
   }
 }
 
