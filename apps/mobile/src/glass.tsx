@@ -26,6 +26,7 @@ export function GlassChrome({
 }) {
   const [reduced, setReduced] = useState(false);
   useEffect(() => {
+    if (Platform.OS === "web") return;
     void AccessibilityInfo.isReduceTransparencyEnabled().then(setReduced);
     const subscription = AccessibilityInfo.addEventListener(
       "reduceTransparencyChanged",

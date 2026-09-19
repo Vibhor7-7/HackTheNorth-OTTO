@@ -19,6 +19,7 @@ import type {
 type FetchLike = (url: string, init?: RequestInit) => Promise<Response>;
 
 function defaultFetch(): FetchLike {
+  if (typeof window !== 'undefined') return window.fetch.bind(window);
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const expoFetch = require('expo/fetch').fetch as FetchLike | undefined;
@@ -26,7 +27,7 @@ function defaultFetch(): FetchLike {
   } catch {
     /* not running under Expo */
   }
-  return globalThis.fetch as FetchLike;
+  return globalThis.fetch.bind(globalThis);
 }
 
 export interface HttpOttoConfig {

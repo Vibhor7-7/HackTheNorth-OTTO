@@ -47,6 +47,7 @@ export class DeviceSession {
   private readonly inputResampler = new Pcm16Resampler(16000, 24000);
   private readonly outputResampler = new Pcm16Resampler(24000, 16000);
   private inputAudioBytes = 0;
+  private inputPeak = 0;
   private inputCapture: Buffer[] = [];
   private outputCapture: Buffer[] = [];
   private rt: RealtimeSession | undefined;
@@ -111,6 +112,7 @@ export class DeviceSession {
       persisted: false,
     };
     this.inputAudioBytes = 0;
+    this.inputPeak = 0;
     this.inputCapture = [];
     this.outputCapture = [];
     this.inputResampler.reset();
@@ -122,15 +124,25 @@ export class DeviceSession {
     // Upstream audio is only valid between ptt_start and ptt_end (Section 7.1).
     if (this.state !== "listening") return;
     this.inputAudioBytes += pcm.byteLength;
+    for (let offset = 0; offset + 1 < pcm.byteLength; offset += 2) {
+      this.inputPeak = Math.max(this.inputPeak, Math.abs(pcm.readInt16LE(offset)));
+    }
     if (env.audioDebug) this.inputCapture.push(Buffer.from(pcm));
     this.rt?.appendAudio(this.inputResampler.process(pcm));
   }
 
   onPttEnd(): void {
     if (this.state !== "listening" || !this.turn) return;
-    if (this.inputAudioBytes < 3200) {
+    if (this.inputAudioBytes < 3200 || this.inputPeak < 32) {
       this.rt?.clearInput();
       this.turn = undefined;
+      if (this.inputPeak < 32) {
+        this.device.sendControl({
+          type: "error",
+          code: "no_audio",
+          message: "No microphone signal detected. Check the microphone wiring.",
+        });
+      }
       this.setState("idle");
       return;
     }

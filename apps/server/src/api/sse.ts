@@ -10,11 +10,14 @@ const log = logger("sse");
 const HEARTBEAT_MS = 15000;
 
 export function openEventStream(req: FastifyRequest, reply: FastifyReply): void {
+  const origin = req.headers.origin;
+  reply.hijack();
   reply.raw.writeHead(200, {
     "Content-Type": "text/event-stream",
     "Cache-Control": "no-cache, no-transform",
     Connection: "keep-alive",
     "X-Accel-Buffering": "no",
+    ...(origin ? { "Access-Control-Allow-Origin": origin, Vary: "Origin" } : {}),
   });
   reply.raw.write(`: connected\n\n`);
 
