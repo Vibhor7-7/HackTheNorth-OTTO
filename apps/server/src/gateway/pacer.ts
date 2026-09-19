@@ -3,14 +3,14 @@
 // than LEAD_MS ahead of real-time playback, so an overrun cannot happen and a
 // barge-in has almost nothing to throw away.
 
-/** PCM s16le mono 24 kHz: 2 bytes per sample, 24000 samples per second. */
-const BYTES_PER_MS = 48;
+/** Device-bound PCM s16le mono 16 kHz: 2 bytes per sample. */
+const BYTES_PER_MS = 32;
 
-/** One downstream frame. 40 ms, matching the upstream frame size in FW-4. */
-const FRAME_BYTES = 1920;
+/** One downstream frame: 100 ms, small enough to refill the device smoothly. */
+const FRAME_BYTES = 3200;
 
-/** How far ahead of the playhead the device is allowed to get (VG-4, proposed). */
-const LEAD_MS = 500;
+/** Keep enough audio ahead of the playhead to ride out network/model jitter. */
+const LEAD_MS = 2000;
 
 export class Pacer {
   private queue: Buffer[] = [];

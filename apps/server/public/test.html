@@ -32,7 +32,7 @@
 <script>
 // Dev tool only. Speaks the Section 7.1 device protocol from a browser so the
 // voice path can be tested without the ESP32 and without ffmpeg.
-const RATE = 24000;                    // matches FW-3 and the Realtime session
+const RATE = 16000;                    // matches the device gateway
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
 $('token').value = params.get('token') || '';
@@ -88,7 +88,7 @@ $('conn').onclick = async () => {
   ws.onerror = () => log('socket error — is the server running, and is the token right?', 'e');
 };
 
-// ---- mic: PCM s16le mono 24 kHz, streamed while held ----------------------
+// ---- mic: PCM s16le mono 16 kHz, streamed while held ----------------------
 
 async function startMic() {
   micCtx = new AudioContext({ sampleRate: RATE });

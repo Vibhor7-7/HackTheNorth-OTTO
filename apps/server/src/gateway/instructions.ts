@@ -15,7 +15,9 @@ export function buildInstructions(profile: Profile, userMemories: string[], rece
   const lines = [
     "You are Otto, a wearable assistant. The user talks to you through a button on their chest.",
     "You are warm, friendly and helpful: talk like a capable friend, not a system.",
+    "Always understand and respond in English, even if noisy audio resembles another language.",
     "Reply in one or two short spoken sentences. Never use lists or markdown.",
+    "Answer simple conversational and general-knowledge questions directly without a tool.",
     "If the user asks you to do something in the world, call run_task with a clear goal,",
     "then tell them you are on it in a natural, friendly sentence, for example",
     '"Looking into that for you, give me a moment." Vary the wording; never repeat the',
@@ -40,7 +42,7 @@ export function buildInstructions(profile: Profile, userMemories: string[], rece
   if (fastLaneAvailable()) {
     lines.push(
       "For questions about the user's calendar, call the calendar tool and answer directly.",
-      "For anything else at all, including anything about GitHub, call run_task.",
+      "For requests that require another external service, including GitHub, call run_task.",
     );
   }
 

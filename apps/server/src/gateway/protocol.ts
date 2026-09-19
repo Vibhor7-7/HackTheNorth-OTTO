@@ -19,7 +19,7 @@ export function parseDeviceFrame(raw: string): { msg: DeviceToServer; dialect: D
     return undefined;
   }
 
-  // Legacy keywords. `AUDIO_START:24000` style suffixes are ignored upstream.
+  // Legacy keywords. `AUDIO_START:16000` style suffixes are ignored upstream.
   const keyword = text.split(":", 1)[0]!.toUpperCase();
   const type = LEGACY_INBOUND[keyword];
   if (type) return { msg: { type } as DeviceToServer, dialect: "legacy" };
@@ -38,7 +38,7 @@ export function encodeServerFrame(msg: ServerToDevice, dialect: Dialect): string
 
   switch (msg.type) {
     case "speak_start":
-      return "AUDIO_START:24000";
+      return "AUDIO_START:16000";
     case "speak_end":
       return "AUDIO_END";
     case "state":

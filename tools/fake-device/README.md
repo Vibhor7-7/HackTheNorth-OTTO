@@ -17,5 +17,5 @@ Needs `ffmpeg` and `ffplay` on PATH: `brew install ffmpeg`.
 | `p`     | `ping`                                                  |
 | `q`     | quit                                                    |
 
-Audio is PCM s16le mono 24 kHz in both directions, exactly as FW-3 and VG-4
-specify, so no resampling happens anywhere.
+Audio is PCM s16le mono 16 kHz in both directions, matching the device gateway.
+The server converts it at the OpenAI Realtime boundary.

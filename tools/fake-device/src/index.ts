@@ -1,4 +1,4 @@
-// DEV-1. Streams the laptop mic to the gateway as PCM s16le 24 kHz with
+// DEV-1. Streams the laptop mic to the gateway as PCM s16le 16 kHz with
 // ptt_start / ptt_end on a keypress, and plays downstream PCM back.
 //
 // Deliberately speaks the canonical JSON protocol (7.1). To exercise the VG-14
