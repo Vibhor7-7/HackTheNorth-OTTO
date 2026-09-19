@@ -1,0 +1,168 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Otto dev mic</title>
+<style>
+  :root { color-scheme: dark; --bg:#0d0f12; --fg:#e8eaed; --dim:#8b9199; --ok:#4ade80; --warn:#fbbf24; --err:#f87171; --line:#1f242b; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:14px/1.5 -apple-system,system-ui,sans-serif;
+         display:flex; flex-direction:column; height:100vh; padding:20px; gap:14px; max-width:820px; margin-inline:auto; }
+  h1 { font-size:15px; margin:0; font-weight:600; letter-spacing:.2px; }
+  .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  input { background:#15191e; border:1px solid var(--line); color:var(--fg); border-radius:8px; padding:8px 10px; font:inherit; }
+  button { border:0; border-radius:10px; padding:10px 16px; font:inherit; font-weight:600; cursor:pointer; }
+  #conn { background:#2563eb; color:#fff; }
+  #ptt { background:#e5e7eb; color:#111; flex:1; min-height:120px; font-size:17px; touch-action:none; user-select:none; }
+  #ptt.live { background:var(--err); color:#fff; }
+  #ptt:disabled { opacity:.35; cursor:not-allowed; }
+  .pill { font-size:12px; color:var(--dim); border:1px solid var(--line); border-radius:999px; padding:3px 10px; }
+  #log { flex:1; overflow:auto; background:#0a0c0f; border:1px solid var(--line); border-radius:10px;
+         padding:12px; font:12px/1.65 ui-monospace,SFMono-Regular,Menlo,monospace; white-space:pre-wrap; }
+  .u { color:var(--warn); } .a { color:var(--ok); } .e { color:var(--err); } .d { color:var(--dim); }
+</style>
+
+<h1>Otto · dev mic <span class="pill" id="state">offline</span> <span class="pill" id="lat">—</span></h1>
+<div class="row">
+  <input id="token" placeholder="DEVICE_TOKEN" style="flex:1;min-width:200px">
+  <button id="conn">Connect</button>
+</div>
+<button id="ptt" disabled>Hold to talk</button>
+<div id="log"></div>
+
+<script>
+// Dev tool only. Speaks the Section 7.1 device protocol from a browser so the
+// voice path can be tested without the ESP32 and without ffmpeg.
+const RATE = 24000;                    // matches FW-3 and the Realtime session
+const $ = (id) => document.getElementById(id);
+const params = new URLSearchParams(location.search);
+$('token').value = params.get('token') || '';
+
+let ws, micCtx, outCtx, srcNode, procNode, stream;
+let talking = false, pttEndAt = 0, playAt = 0;
+
+const log = (msg, cls = '') => {
+  const el = $('log');
+  el.innerHTML += `<span class="${cls}">${new Date().toLocaleTimeString()}  ${msg}</span>\n`;
+  el.scrollTop = el.scrollHeight;
+};
+const setState = (s) => { $('state').textContent = s; };
+
+$('conn').onclick = async () => {
+  if (ws) { ws.close(); return; }
+  const token = $('token').value.trim();
+  if (!token) return log('enter DEVICE_TOKEN first', 'e');
+
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  ws = new WebSocket(`${proto}//${location.host}/device?token=${encodeURIComponent(token)}`);
+  ws.binaryType = 'arraybuffer';
+
+  ws.onopen = () => {
+    setState('connected'); $('conn').textContent = 'Disconnect'; $('ptt').disabled = false;
+    ws.send(JSON.stringify({ type: 'hello', fw: 'browser-1.0.0', sample_rate: RATE, battery: 1 }));
+    log('connected', 'd');
+  };
+
+  ws.onmessage = (ev) => {
+    if (ev.data instanceof ArrayBuffer) return play(ev.data);
+    const m = JSON.parse(ev.data);
+    if (m.type === 'transcript') {
+      log(`${m.role === 'user' ? 'you' : 'otto'}: ${m.text}`, m.role === 'user' ? 'u' : 'a');
+    } else if (m.type === 'state') {
+      setState(m.value);
+      if (m.value === 'thinking') log('thinking…', 'd');
+    } else if (m.type === 'speak_start') {
+      // Reset the playback clock so a new response does not queue behind the old one.
+      playAt = 0;
+      if (pttEndAt) { $('lat').textContent = `${Date.now() - pttEndAt} ms to first audio`; pttEndAt = 0; }
+    } else if (m.type === 'speak_end') {
+      log(`speak_end (${m.reason})`, 'd');
+    } else if (m.type === 'error') {
+      log(`error ${m.code}: ${m.message}`, 'e');
+    }
+  };
+
+  ws.onclose = () => {
+    setState('offline'); $('conn').textContent = 'Connect'; $('ptt').disabled = true;
+    stopMic(); ws = null; log('disconnected', 'd');
+  };
+  ws.onerror = () => log('socket error — is the server running, and is the token right?', 'e');
+};
+
+// ---- mic: PCM s16le mono 24 kHz, streamed while held ----------------------
+
+async function startMic() {
+  micCtx = new AudioContext({ sampleRate: RATE });
+  stream = await navigator.mediaDevices.getUserMedia({
+    audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
+  });
+  srcNode = micCtx.createMediaStreamSource(stream);
+  procNode = micCtx.createScriptProcessor(2048, 1, 1);
+  procNode.onaudioprocess = (e) => {
+    if (!talking || !ws || ws.readyState !== 1) return;
+    const f32 = e.inputBuffer.getChannelData(0);
+    const i16 = new Int16Array(f32.length);
+    for (let i = 0; i < f32.length; i++) {
+      const s = Math.max(-1, Math.min(1, f32[i]));
+      i16[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+    }
+    ws.send(i16.buffer);
+  };
+  srcNode.connect(procNode);
+  procNode.connect(micCtx.destination);   // required for onaudioprocess to fire
+}
+
+function stopMic() {
+  procNode?.disconnect(); srcNode?.disconnect();
+  stream?.getTracks().forEach((t) => t.stop());
+  micCtx?.close();
+  micCtx = srcNode = procNode = stream = undefined;
+}
+
+// ---- playback: schedule each PCM chunk back to back ----------------------
+
+function play(buf) {
+  outCtx ??= new AudioContext({ sampleRate: RATE });
+  const i16 = new Int16Array(buf);
+  const audio = outCtx.createBuffer(1, i16.length, RATE);
+  const ch = audio.getChannelData(0);
+  for (let i = 0; i < i16.length; i++) ch[i] = i16[i] / 0x8000;
+  const node = outCtx.createBufferSource();
+  node.buffer = audio;
+  node.connect(outCtx.destination);
+  const now = outCtx.currentTime;
+  if (playAt < now) playAt = now + 0.05;   // small cushion after a gap
+  node.start(playAt);
+  playAt += audio.duration;
+}
+
+// ---- push to talk --------------------------------------------------------
+
+async function down() {
+  if (talking || !ws || ws.readyState !== 1) return;
+  talking = true;
+  $('ptt').classList.add('live'); $('ptt').textContent = 'Release to send';
+  if (!micCtx) await startMic();
+  await micCtx.resume();
+  outCtx?.resume();
+  ws.send(JSON.stringify({ type: 'ptt_start' }));
+  log('ptt_start', 'd');
+}
+
+function up() {
+  if (!talking) return;
+  talking = false;
+  $('ptt').classList.remove('live'); $('ptt').textContent = 'Hold to talk';
+  pttEndAt = Date.now();
+  ws.send(JSON.stringify({ type: 'ptt_end' }));
+  log('ptt_end', 'd');
+}
+
+const ptt = $('ptt');
+ptt.addEventListener('pointerdown', (e) => { e.preventDefault(); down(); });
+ptt.addEventListener('pointerup', up);
+ptt.addEventListener('pointercancel', up);
+ptt.addEventListener('pointerleave', () => { if (talking) up(); });
+// Space bar, so you can keep your eyes on the log.
+addEventListener('keydown', (e) => { if (e.code === 'Space' && !e.repeat) { e.preventDefault(); down(); } });
+addEventListener('keyup', (e) => { if (e.code === 'Space') { e.preventDefault(); up(); } });
+</script>

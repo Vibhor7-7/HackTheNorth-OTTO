@@ -1,5 +1,7 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { env } from "../env";
 import { requireAppKey } from "./auth";
 import { openEventStream } from "./sse";
@@ -38,6 +40,15 @@ export function buildApp() {
   connectCallbackRoutes(app);
 
   app.get("/api/events", (req, reply) => openEventStream(req, reply));
+
+  // DEV-1 companion: a browser mic client that speaks the device protocol (7.1),
+  // for when there is no hardware and no ffmpeg. It asks for DEVICE_TOKEN rather
+  // than having it baked in, because this route is unauthenticated and the server
+  // may be exposed through a tunnel.
+  app.get("/test", async (_req, reply) => {
+    const html = readFileSync(resolve(import.meta.dirname, "../../public/test.html"), "utf8");
+    return reply.type("text/html").send(html);
+  });
 
   return app;
 }

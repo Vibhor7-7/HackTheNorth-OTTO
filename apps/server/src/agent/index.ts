@@ -14,6 +14,7 @@ import {
   addStep, createTask, getTask, latestTask, updateTask, findByTaskId, updateActionItem,
 } from "../store";
 import { speak } from "./notify";
+import { runLoop } from "./loop";
 import { logger } from "../log";
 
 const log = logger("agent");
@@ -30,13 +31,7 @@ export function runTask({ goal, context, source }: RunTaskInput): RunTaskResult 
   const tlog = log.child({ task_id: task.id });
   tlog.info("task created", { source, goal });
 
-  addStep({
-    task_id: task.id,
-    kind: "plan",
-    summary: context ? `${goal} (context: ${context})` : goal,
-  });
-
-  void drive(task.id, goal).catch((err: unknown) => {
+  void drive(task.id, context ? `${goal}\n\nContext: ${context}` : goal).catch((err: unknown) => {
     const message = err instanceof Error ? err.message : String(err);
     tlog.error("loop threw", { error: message });
     fail(task.id, message);
@@ -45,23 +40,10 @@ export function runTask({ goal, context, source }: RunTaskInput): RunTaskResult 
   return { task_id: task.id, status: "started" };
 }
 
-// [TODO AG-2, AG-7, AG-9] Replace with the Responses API tool loop:
-//   1. Composio tool search on the goal (CMP-1), write a `plan` step naming the
-//      toolkits chosen and the top three not chosen.
-//   2. Loop: model selects a tool -> approvals/gate.ts (AP-1) -> execute (CMP-3)
-//      -> observe. Max 15 calls, 3 minutes.
-//   3. On needs-auth, raise a ConnectionRequest (CMP-4) instead of failing.
-//   4. Finish with spoken_summary under 25 words and detail_md (AG-5).
-// Until then a task fails loudly rather than silently pretending to work, which
-// keeps NF-2 honest during gateway development.
 async function drive(taskId: string, goal: string): Promise<void> {
-  addStep({
-    task_id: taskId,
-    kind: "error",
-    summary: "Task agent loop not implemented yet (AG-2). Gateway wiring only.",
-  });
-  fail(taskId, "the task agent isn't wired up yet");
-  log.child({ task_id: taskId }).warn("stub loop", { goal });
+  const outcome = await runLoop(taskId, goal);
+  log.child({ task_id: taskId }).info("loop finished", { status: outcome.status });
+  if (outcome.status === "succeeded") syncActionItemForTask(taskId);
 }
 
 function fail(taskId: string, reason: string): void {

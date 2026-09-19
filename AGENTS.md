@@ -23,12 +23,17 @@ has a stable ID (`VG-4`, `AG-7`, `CMP-9`) and Section 7 is a binding contract.
 pnpm install
 pnpm dev             # server on :3000 (REST + SSE + device WS on one port)
 pnpm dev:mobile      # Expo app (apps/mobile uses npm, not pnpm - see pnpm-workspace.yaml)
-pnpm fake-device     # DEV-1: laptop mic speaks the device protocol
+pnpm fake-device     # DEV-1: laptop mic speaks the device protocol (needs ffmpeg)
 pnpm typecheck       # every package
 ```
 
 `apps/server/.env` comes from `apps/server/.env.example` (Section 5.2).
-`pnpm fake-device` needs `ffmpeg` and `ffplay` on PATH.
+
+**Talking to Otto without hardware.** Open `http://localhost:3000/test?token=$DEVICE_TOKEN`
+and hold the button (or the space bar). It speaks the Section 7.1 protocol from the
+browser: mic in as PCM s16le 24 kHz, paced audio back, transcripts and latency in
+the log. No install needed. `pnpm fake-device` does the same from the terminal but
+needs `ffmpeg` and `ffplay` on PATH.
 
 ## Layout
 
@@ -69,6 +74,8 @@ htn-voice/         Friday spike, reference only - not wired into the build
 ## Unfinished seams
 
 Grep for `[TODO` - each one names the requirement IDs that finish it:
-`AG-2` (the Responses tool loop), `AP-4` (resuming a task once its approval is
-decided), `ACT-1` (extraction), `CHAT-1` (the context agent). Composio (CMP-1,
-CMP-3, CMP-4, CMP-6) is wired and verified against the live account.
+`AP-4` (resuming a task once its approval is decided - the gate holds the call and
+its `args_hash`, nothing releases it yet), `AG-6` (resuming a `needs_input` task
+from the next voice turn), `ACT-1` (extraction), `CHAT-1` (the context agent).
+Composio (CMP-1, CMP-3, CMP-4, CMP-6) and the agent loop (AG-2, AG-5, AG-7, AG-9)
+are wired and verified end to end from voice.
