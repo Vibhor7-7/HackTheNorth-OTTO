@@ -45,7 +45,12 @@ export const TIER_OVERRIDES: Record<string, RiskTier> = {
   LINKEDIN_WHO_AM_I: "R0",
   LINKEDIN_GET_POST_CONTENT: "R0",
 
-  // D-36. Reading the public web changes nothing and sends nothing, so all three
+  // Claude Code (D-36) edits files and runs commands on the user's laptop. RUN
+  // matches no pattern, so this would reach R2 by default; pinned so it cannot
+  // drift, because the approval card carrying the exact prompt is the safeguard.
+  CLAUDECODE_RUN: "R2",
+
+  // D-37. Reading the public web changes nothing and sends nothing, so all three
   // are R0 and run without an approval. Pinned rather than left to the patterns:
   // COMPOSIO_SEARCH_WEB would reach R0 only through the SEARCH in its toolkit
   // prefix, which is a coincidence of naming, not a rule.
@@ -99,7 +104,7 @@ function hasRiskyArg(args: unknown): boolean {
  * Toolkit slugs that themselves contain an underscore, so the first-underscore
  * rule below would truncate them. Without this, every COMPOSIO_SEARCH_* step is
  * logged against a toolkit called "composio" that does not exist, and the
- * connection lookup in the gate asks about the wrong thing (D-36).
+ * connection lookup in the gate asks about the wrong thing (D-37).
  */
 const COMPOUND_TOOLKITS = ["composio_search"];
 

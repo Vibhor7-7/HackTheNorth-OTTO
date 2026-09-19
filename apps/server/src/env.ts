@@ -1,5 +1,7 @@
 // Section 5.2. Everything from env; nothing hardcoded (NF-5).
 
+import { resolve } from "node:path";
+
 function req(name: string): string {
   const v = process.env[name];
   if (!v) throw new Error(`Missing required env var ${name} (see apps/server/.env.example, Section 5.2)`);
@@ -64,4 +66,13 @@ export const env = {
   databasePath: opt("DATABASE_PATH", "./data/otto.sqlite"),
 
   devTierOverrides: parseTierOverrides(opt("DEV_TIER_OVERRIDES")),
+
+  // D-36: Claude Code as a task-agent tool. Enabled from the app (Apps tab), not
+  // from here; these only say where and how it runs.
+  claudeCodeDir: resolve(opt("CLAUDE_CODE_DIR", resolve(import.meta.dirname, "../../.."))),
+  claudeCodeBin: opt("CLAUDE_CODE_BIN", "claude"),
+  claudeCodeMaxTurns: num("CLAUDE_CODE_MAX_TURNS", 25),
+  claudeCodeTimeoutMs: num("CLAUDE_CODE_TIMEOUT_MS", 170_000),
+  claudeCodeAllowedTools: opt("CLAUDE_CODE_ALLOWED_TOOLS", "Read,Edit,Write,Glob,Grep,Bash")
+    .split(",").map((t) => t.trim()).filter(Boolean),
 } as const;

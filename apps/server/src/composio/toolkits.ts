@@ -13,7 +13,7 @@
 
 /** Tools loaded into the agent loop for a toolkit we know the demo needs. */
 export const CURATED_TOOLS: Record<string, string[]> = {
-  // D-36. The web, as a toolkit. No auth: Composio hosts the search, so this one
+  // D-37. The web, as a toolkit. No auth: Composio hosts the search, so this one
   // is available from a cold start and can never be in the S0 "needs connecting"
   // state. Three tools and no more - the toolkit also carries Amazon, Walmart,
   // flights and hotels, none of which a spoken question needs.

@@ -5,6 +5,7 @@
 
 import { composio, log } from "../composio/client";
 import { userId } from "../composio/client";
+import { CLAUDE_CODE_SLUG, CLAUDE_CODE_TOOL } from "../local/claudeCode";
 
 export interface ResponsesTool {
   type: "function";
@@ -52,6 +53,13 @@ export const ASK_TOOL: ResponsesTool = {
 };
 
 export async function toolSchemas(slugs: string[]): Promise<ResponsesTool[]> {
+  // D-36: the one tool Composio does not know about carries its own schema.
+  const local: ResponsesTool[] = slugs.includes(CLAUDE_CODE_SLUG) ? [CLAUDE_CODE_TOOL] : [];
+  const remote = slugs.filter((s) => s !== CLAUDE_CODE_SLUG);
+  return [...local, ...(await composioSchemas(remote))];
+}
+
+async function composioSchemas(slugs: string[]): Promise<ResponsesTool[]> {
   if (slugs.length === 0) return [];
   try {
     const raw = await composio().tools.get(userId(), { tools: slugs } as never);

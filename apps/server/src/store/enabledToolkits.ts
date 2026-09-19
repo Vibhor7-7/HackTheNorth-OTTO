@@ -17,7 +17,7 @@ export function disableToolkit(slug: string): boolean {
 }
 
 /**
- * D-36: toolkits that are part of Otto rather than something the user adds. They
+ * D-37: toolkits that are part of Otto rather than something the user adds. They
  * need no account and no catalogue trip, so they are unioned in here rather than
  * seeded as rows - a row could be deleted, and Otto would be back to telling the
  * user it cannot look anything up. `disableToolkit` is therefore a no-op for

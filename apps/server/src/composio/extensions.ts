@@ -8,6 +8,7 @@ import { publish } from "../bus";
 import { catalog } from "./catalog";
 import { enabledToolkitSlugs } from "../store";
 import type { CatalogEntry } from "@otto/shared";
+import { CLAUDE_CODE_TOOLKIT, claudeCodeStatus } from "../local/claudeCode";
 
 /** Shown when Composio is unconfigured so the Connections tab is never empty. */
 const PLACEHOLDERS: Extension[] = Object.keys(CURATED_TOOLS).map((slug) => ({
@@ -18,8 +19,26 @@ const PLACEHOLDERS: Extension[] = Object.keys(CURATED_TOOLS).map((slug) => ({
   tool_count: CURATED_TOOLS[slug]!.length,
 }));
 
+/** D-36: Claude Code as a card. Connected, off, or missing on the server - it always shows. */
+function claudeCodeExtension(): Extension {
+  const st = claudeCodeStatus();
+  return {
+    id: CLAUDE_CODE_TOOLKIT,
+    name: "Claude Code",
+    description: st.enabled
+      ? `Connected. Otto can ask Claude Code (${st.version}) to work in ${st.dir}. Every run needs your approval.`
+      : st.available
+        ? `Found Claude Code ${st.version} on the server. Connect to let Otto hand it engineering work in ${st.dir}.`
+        : st.version === null
+          ? `The claude command was not found on the server. Install Claude Code there to use this.`
+          : `CLAUDE_CODE_DIR does not exist on the server: ${st.dir}.`,
+    status: st.enabled ? "connected" : st.available ? "needs_auth" : "suggested",
+    tool_count: 1,
+  };
+}
+
 export async function listExtensions(): Promise<Extension[]> {
-  if (!composioConfigured()) return PLACEHOLDERS;
+  if (!composioConfigured()) return [claudeCodeExtension(), ...PLACEHOLDERS];
 
   try {
     const [configs, connected, entries] = await Promise.all([
@@ -50,6 +69,8 @@ export async function listExtensions(): Promise<Extension[]> {
         logo_url: logo(slug),
       });
     }
+
+    byToolkit.set(CLAUDE_CODE_TOOLKIT, claudeCodeExtension());
 
     // D-34: toolkits that need no account, added from the catalogue.
     for (const slug of enabledToolkitSlugs()) {

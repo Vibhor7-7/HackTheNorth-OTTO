@@ -39,7 +39,7 @@ export function systemPrompt(
     "- If an app is not connected yet, calling one of its tools pauses the task while the user",
     "  connects it in the app, then the same call runs again by itself. That is expected. Only if the",
     "  tool then reports it is still unavailable, or a permission was refused, call finish and say so.",
-    // D-36. The agent is the only thing in Otto that can reach the web, so a goal
+    // D-37. The agent is the only thing in Otto that can reach the web, so a goal
     // that arrived here because nothing else matched is usually a question.
     "- You can search the web. If the goal is a question about the world - a place, a price, a",
     "  rating, an opening time, a recent event - search before answering, and answer from what",
@@ -48,6 +48,9 @@ export function systemPrompt(
     "  three things, in one sentence, under 25 words, with no URLs and no list. The full list and",
     "  the sources go in detail_md, where the user can read them in the app.",
     "- When scheduling, always state the day and the clock time back to the user.",
+    "- If CLAUDECODE_RUN is available, it is Claude Code working in the user's project on their laptop.",
+    "  Give it one complete prompt with everything the user said; it is slow, so do not call it in pieces.",
+    "  Report what it says it did, not what you assume it did.",
     "- Call finish exactly once, at the end, whether you succeeded or not.",
   ]
     .filter(Boolean)

@@ -14,6 +14,7 @@ import { CURATED_TOOLS } from "./toolkits";
 import { fastLaneAvailable } from "./fastlane";
 import { subscribe } from "../bus";
 import { enabledToolkitSlugs } from "../store";
+import { CLAUDE_CODE_TOOLKIT, claudeCodeEnabled } from "../local/claudeCode";
 
 let connected = new Set<string>();
 let refreshedAt = 0;
@@ -25,7 +26,8 @@ export function refreshCapabilities(): Promise<void> {
   inflight = (async () => {
     if (!composioConfigured()) { connected = new Set(); return; }
     try {
-      connected = new Set([...(await activeToolkitSlugs()), ...enabledToolkitSlugs()]);
+      const enabled = [...enabledToolkitSlugs()].filter((s) => s !== CLAUDE_CODE_TOOLKIT || claudeCodeEnabled());
+      connected = new Set([...(await activeToolkitSlugs()), ...enabled]);
       refreshedAt = Date.now();
     } catch (err) {
       log.warn("capability refresh failed; keeping the last answer", {
@@ -47,9 +49,11 @@ export function capabilitySummary(): ListCapabilitiesResult {
   const can = [...connected]
     .map((slug) => ({
       toolkit: slug,
-      actions: known.includes(slug)
-        ? phrases(slug)
-        : ["its common read and write actions, chosen when the task runs"],
+      actions: slug === CLAUDE_CODE_TOOLKIT
+        ? ["engineering work in the project repository on the laptop: fix bugs, add tests, refactor, explain code (needs approval)"]
+        : known.includes(slug)
+          ? phrases(slug)
+          : ["its common read and write actions, chosen when the task runs"],
     }));
   const needs_connection = known.filter((slug) => !connected.has(slug));
 
@@ -60,7 +64,7 @@ export function capabilitySummary(): ListCapabilitiesResult {
       ? ["whether the user is free in a time range", "what is on the user's calendar on a day"]
       : [],
     cannot: [
-      // D-36: the web is always available, so "not connected" no longer means
+      // D-37: the web is always available, so "not connected" no longer means
       // "cannot find out" - it only limits acting inside that app.
       "act inside an app that is not connected; offer to connect it from the app",
       "sending, posting, deleting or paying without the user approving it in the app first",
@@ -71,7 +75,7 @@ export function capabilitySummary(): ListCapabilitiesResult {
 }
 
 /**
- * D-36: the mechanical rule turns COMPOSIO_SEARCH_WEB into "web", which tells the
+ * D-37: the mechanical rule turns COMPOSIO_SEARCH_WEB into "web", which tells the
  * voice model nothing. A toolkit whose slugs do not read as English says what it
  * does in its own words instead.
  */

@@ -25,6 +25,7 @@ import { activeToolkitSlugs, composio, items, log } from "./client";
 import { CURATED_TOOLS, rankUncuratedTools } from "./toolkits";
 import { enabledToolkitSlugs } from "../store";
 import { catalog } from "./catalog";
+import { CLAUDE_CODE_SLUG, CLAUDE_CODE_TOOLKIT, claudeCodeEnabled } from "../local/claudeCode";
 
 export interface DiscoveredToolkit {
   slug: string;
@@ -63,7 +64,7 @@ export async function discover(goal: string, max = 2): Promise<Discovery> {
     .map((tk) => ({ ...tk, score: scoreToolkit(tk.slug, goal, hinted) + (named.some((c) => c.slug === tk.slug) ? 6 : 0) }))
     .filter((tk) => tk.score > 0);
 
-  // D-36. A factual question names no app, so every curated toolkit sits on its
+  // D-37. A factual question names no app, so every curated toolkit sits on its
   // floor score and the sort hands the agent whichever happens to come first -
   // measured: "find the best restaurants in Waterloo, Canada" chose LinkedIn and
   // GitHub. When nothing actually matched the goal, the web is the right answer.
@@ -122,8 +123,10 @@ async function availableToolkits(): Promise<{ slug: string; name: string; connec
     }
     // D-34: no-auth toolkits have no auth config; they are enabled in the store.
     for (const slug of enabledToolkitSlugs()) {
+      if (slug === CLAUDE_CODE_TOOLKIT) continue;             // D-36: added below on its own terms
       if (!bySlug.has(slug)) bySlug.set(slug, { slug, name: slug, connected: true });
     }
+    if (claudeCodeEnabled()) bySlug.set(CLAUDE_CODE_TOOLKIT, { slug: CLAUDE_CODE_TOOLKIT, name: "Claude Code", connected: true });
     const out = [...bySlug.values()];
     return out.length ? out : fallback();
   } catch (err) {
@@ -134,8 +137,10 @@ async function availableToolkits(): Promise<{ slug: string; name: string; connec
   }
 }
 
-const fallback = () =>
-  Object.keys(CURATED_TOOLS).map((slug) => ({ slug, name: slug, connected: false }));
+const fallback = () => [
+  ...Object.keys(CURATED_TOOLS).map((slug) => ({ slug, name: slug, connected: false })),
+  ...(claudeCodeEnabled() ? [{ slug: CLAUDE_CODE_TOOLKIT, name: "Claude Code", connected: true }] : []),
+];
 
 /**
  * Best-effort keyword search, purely to widen the candidate set. Returns the
@@ -197,7 +202,8 @@ const TOOLKIT_HINTS: Record<string, string[]> = {
   gmail: ["email", "mail", "inbox", "gmail", "send", "invite", "reply", "forward", "address"],
   github: ["github", "issue", "issues", "repo", "repository", "pull", "pr", "commit", "branch", "notification"],
   linkedin: ["linkedin", "post", "share", "article", "network", "followers", "connections", "profile"],
-  // D-36. These only have to win the ties; the real safety net is the fallback in
+  claudecode: ["claude", "code", "codebase", "repo", "bug", "fix", "test", "tests", "refactor", "implement", "function", "file", "typescript", "compile", "lint", "build"],
+  // D-37. These only have to win the ties; the real safety net is the fallback in
   // discover(), because the goals that need the web ("best restaurants in
   // Waterloo") usually contain none of these words.
   composio_search: [
@@ -209,7 +215,7 @@ const TOOLKIT_HINTS: Record<string, string[]> = {
   // steer a task towards it even if an auth config lingers in the account.
 };
 
-/** D-36: the no-auth toolkit that can reach the open web (toolkits.ts). */
+/** D-37: the no-auth toolkit that can reach the open web (toolkits.ts). */
 export const WEB_SEARCH_TOOLKIT = "composio_search";
 
 /** What a curated toolkit scores when nothing in the goal points at it. */
@@ -226,6 +232,7 @@ function scoreToolkit(slug: string, goal: string, hinted: Set<string>): number {
 }
 
 async function toolsFor(toolkit: string, goal: string): Promise<string[]> {
+  if (toolkit === CLAUDE_CODE_TOOLKIT) return [CLAUDE_CODE_SLUG];
   const curated = CURATED_TOOLS[toolkit];
   if (curated) return curated;
   try {
