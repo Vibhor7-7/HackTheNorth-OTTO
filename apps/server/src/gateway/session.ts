@@ -17,6 +17,9 @@ import { createTurn, getProfile, listMemories, recentTurnsForReseed, updateTurn 
 import { onTurnPersisted } from "../extract";
 import { logger } from "../log";
 import { newId, nowIso } from "../ids";
+import { Pcm16Resampler } from "./resample";
+import { env } from "../env";
+import { writeDebugAudio } from "./debugAudio";
 
 const log = logger("gateway");
 
@@ -41,6 +44,11 @@ interface TurnRecord {
 }
 
 export class DeviceSession {
+  private readonly inputResampler = new Pcm16Resampler(16000, 24000);
+  private readonly outputResampler = new Pcm16Resampler(24000, 16000);
+  private inputAudioBytes = 0;
+  private inputCapture: Buffer[] = [];
+  private outputCapture: Buffer[] = [];
   private rt: RealtimeSession | undefined;
   private opening: Promise<unknown> | undefined;
   private state: DeviceState = "idle";
@@ -102,6 +110,10 @@ export class DeviceSession {
       created: false,
       persisted: false,
     };
+    this.inputAudioBytes = 0;
+    this.inputCapture = [];
+    this.outputCapture = [];
+    this.inputResampler.reset();
     this.rt?.clearInput();
     this.setState("listening");
   }
@@ -109,11 +121,19 @@ export class DeviceSession {
   onAudio(pcm: Buffer): void {
     // Upstream audio is only valid between ptt_start and ptt_end (Section 7.1).
     if (this.state !== "listening") return;
-    this.rt?.appendAudio(pcm);
+    this.inputAudioBytes += pcm.byteLength;
+    if (env.audioDebug) this.inputCapture.push(Buffer.from(pcm));
+    this.rt?.appendAudio(this.inputResampler.process(pcm));
   }
 
   onPttEnd(): void {
     if (this.state !== "listening" || !this.turn) return;
+    if (this.inputAudioBytes < 3200) {
+      this.rt?.clearInput();
+      this.turn = undefined;
+      this.setState("idle");
+      return;
+    }
     this.turn.ptt_end_at = Date.now();
     this.rt?.commitInput();
     this.rt?.createResponse();
@@ -125,6 +145,8 @@ export class DeviceSession {
     // FW-8: a press under 250 ms. Clear the buffer and do not respond.
     this.rt?.clearInput();
     this.turn = undefined;
+    this.inputCapture = [];
+    this.outputCapture = [];
     this.setState("idle");
   }
 
@@ -155,9 +177,12 @@ export class DeviceSession {
 
     // Profile and notes are read here, at session start, and never again on the
     // voice path (VG-10, Section 3 latency posture).
-    const profile = getProfile();
-    const notes = listMemories("user").map((m) => m.text);
-    const recent = recentTurnsForReseed(3);
+    const savedProfile = getProfile();
+    const profile = env.voiceFreshContext
+      ? { ...savedProfile, name: "User", role: undefined, contacts: [], preferences: undefined, handles: undefined }
+      : savedProfile;
+    const notes = env.voiceFreshContext ? [] : listMemories("user").map((m) => m.text);
+    const recent = env.voiceFreshContext ? [] : recentTurnsForReseed(3);
     // D-32: warm the capability cache alongside the session handshake, off the
     // turn. list_capabilities reads it synchronously.
     void refreshCapabilities();
@@ -199,6 +224,7 @@ export class DeviceSession {
    * everything that response goes on to emit.
    */
   private onResponseCreated(responseId: string): void {
+    this.outputResampler.reset();
     if (responseId && !this.suppressedResponses.has(responseId)) {
       this.activeRealtimeResponseId = responseId;
     }
@@ -218,7 +244,11 @@ export class DeviceSession {
         () => this.endSpeech("done"),
       );
     }
-    this.pacer.push(pcm);
+    const devicePcm = this.outputResampler.process(pcm);
+    if (devicePcm.byteLength > 0) {
+      if (env.audioDebug) this.outputCapture.push(Buffer.from(devicePcm));
+      this.pacer.push(devicePcm);
+    }
   }
 
   private onAudioDone(responseId: string): void {
@@ -461,12 +491,14 @@ export class DeviceSession {
     }
   }
 
-  /** DATA-1 and VG-15. Raw audio is never stored. */
+  /** DATA-1 and VG-15. Raw audio is stored only when AUDIO_DEBUG is explicit. */
   private persistTurn(): void {
     const t = this.turn;
     if (!t || t.persisted) return;
     t.persisted = true;
     this.turn = undefined;
+
+    if (env.audioDebug) this.saveDebugAudio(t.turn_id);
 
     const latency =
       t.ptt_end_at && t.first_audio_byte_at ? t.first_audio_byte_at - t.ptt_end_at : undefined;
@@ -522,6 +554,8 @@ export class DeviceSession {
     );
     rt.createResponse();
     this.responseInFlight = true;
+    this.inputCapture = [];
+    this.outputCapture = [];
 
     // Otto speaking unprompted is still something the Context tab has to show
     // (APP-6), so it gets its own Turn with no user text rather than being
@@ -552,6 +586,35 @@ export class DeviceSession {
     if (this.state === value) return;
     this.state = value;
     this.device.sendControl({ type: "state", value });
+  }
+
+  private saveDebugAudio(turnId: string): void {
+    try {
+      const inputPath = writeDebugAudio(
+        env.databasePath,
+        turnId,
+        "mic-input",
+        Buffer.concat(this.inputCapture),
+      );
+      const outputPath = writeDebugAudio(
+        env.databasePath,
+        turnId,
+        "speaker-output",
+        Buffer.concat(this.outputCapture),
+      );
+      this.log.info("audio debug captured", {
+        turn_id: turnId,
+        input_path: inputPath,
+        input_bytes: this.inputCapture.reduce((total, chunk) => total + chunk.byteLength, 0),
+        output_path: outputPath,
+        output_bytes: this.outputCapture.reduce((total, chunk) => total + chunk.byteLength, 0),
+      });
+    } catch (error) {
+      this.log.warn("audio debug capture failed", {
+        turn_id: turnId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
 
   get currentState(): DeviceState {

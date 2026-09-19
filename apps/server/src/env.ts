@@ -57,6 +57,8 @@ export const env = {
   composioUserId: opt("COMPOSIO_USER_ID", "demo-user"),
 
   demoMode: opt("DEMO_MODE", "false") === "true",
+  audioDebug: opt("AUDIO_DEBUG", "false") === "true",
+  voiceFreshContext: opt("VOICE_FRESH_CONTEXT", "false") === "true",
   realtimeIdleTimeoutMs: num("REALTIME_IDLE_TIMEOUT_MS", 60000),
 
   databasePath: opt("DATABASE_PATH", "./data/otto.sqlite"),

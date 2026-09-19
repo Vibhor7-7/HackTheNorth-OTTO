@@ -70,7 +70,10 @@ export class RealtimeSession {
         audio: {
           input: {
             format: { type: "audio/pcm", rate: 24000 },
-            transcription: { model: env.transcribeModel },   // VG-8
+            transcription: {
+              model: env.transcribeModel,
+              language: "en",
+            },                                                // VG-8
             turn_detection: null,                            // D-7: the button is the VAD
           },
           output: {

@@ -1,14 +1,14 @@
 // Section 7.1 device <-> server WebSocket protocol.
 //
 // URL: wss://<host>/device?token=<DEVICE_TOKEN>
-// Binary frames = raw audio, PCM s16le mono 24 kHz.
+// Binary frames = raw audio, PCM s16le mono 16 kHz.
 //   upstream   valid only between ptt_start and ptt_end
 //   downstream valid only between speak_start and speak_end
 // Text frames = JSON control messages (canonical) or legacy keywords (VG-14).
 
 import type { DeviceState } from "./types";
 
-export const DEVICE_SAMPLE_RATE = 24000;
+export const DEVICE_SAMPLE_RATE = 16000;
 
 export type DeviceToServer =
   | { type: "hello"; fw?: string; sample_rate?: number; battery?: number }
