@@ -10,7 +10,7 @@ import { Pacer } from "./pacer";
 import { buildInstructions } from "./instructions";
 import { gate } from "../approvals/gate";
 import { FAST_LANE, fastLaneAvailable } from "../composio/fastlane";
-import { answerQuestion, cancelTask, runTask, taskStatus } from "../agent";
+import { answerQuestion, cancelTask, runTask, startFastLaneTask, taskStatus } from "../agent";
 import { registerSpeaker, type SpeakRequest } from "../agent/notify";
 import { createTurn, getProfile, listMemories, recentTurnsForReseed, updateTurn } from "../store";
 import { onTurnPersisted } from "../extract";
@@ -329,12 +329,9 @@ export class DeviceSession {
       return;
     }
 
-    // The fast lane needs a Task to hang its step log off, so the app shows the
-    // call like any other (AG-4).
-    const { task_id } = runTask({
-      goal: `${call.name} ${JSON.stringify(call.args)}`,
-      source: "voice",
-    });
+    // A Task to hang the step log off (AG-4), with no agent loop: the gateway
+    // executes this call itself, just below, through the same gate.
+    const task_id = startFastLaneTask(call.name, call.args);
     this.turn?.task_ids.push(task_id);
 
     this.outstandingFastLane.add(call.callId);

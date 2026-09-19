@@ -54,6 +54,26 @@ function fail(taskId: string, reason: string): void {
   speak({ text: spoken, reason: "error", task_id: taskId });
 }
 
+/**
+ * VG-16. The fast lane needs a Task to hang its step log off (AG-4), but it must
+ * NOT start the agent loop: the gateway is about to execute the call itself,
+ * through the same gate. Calling runTask() here would run the whole loop a second
+ * time on a goal like `calendar_free_busy {"start":...}`.
+ *
+ * Task creation still lives in this module, so AG-12 holds: nothing outside
+ * agent/ invents a Task.
+ */
+export function startFastLaneTask(toolName: string, args: unknown): string {
+  const task = createTask(`Answer a calendar question (${toolName})`, "voice");
+  addStep({
+    task_id: task.id,
+    kind: "plan",
+    summary: `Fast lane: ${toolName} answered inside the voice turn (VG-16).`,
+    args,
+  });
+  return task.id;
+}
+
 /** AG-6: a running task's question is answered by the next voice turn. */
 export function answerQuestion(taskId: string, answer: string): { ok: true } {
   const task = getTask(taskId);
