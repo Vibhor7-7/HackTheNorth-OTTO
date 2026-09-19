@@ -22,7 +22,7 @@ has a stable ID (`VG-4`, `AG-7`, `CMP-9`) and Section 7 is a binding contract.
 ```sh
 pnpm install
 pnpm dev             # server on :3000 (REST + SSE + device WS on one port)
-pnpm dev:mobile      # Expo app
+pnpm dev:mobile      # Expo app (apps/mobile uses npm, not pnpm - see pnpm-workspace.yaml)
 pnpm fake-device     # DEV-1: laptop mic speaks the device protocol
 pnpm typecheck       # every package
 ```

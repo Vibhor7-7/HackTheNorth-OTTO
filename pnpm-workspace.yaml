@@ -1,4 +1,8 @@
 packages:
-  - 'apps/*'
+  - 'apps/server'
   - 'packages/*'
   - 'tools/*'
+  # apps/mobile is deliberately NOT a pnpm workspace package. It has its own
+  # npm package-lock.json and Expo's Metro bundler does not reliably follow
+  # pnpm's symlinked node_modules. The frontend owners keep npm; the server side
+  # keeps pnpm. Settle this properly only if it starts costing time.

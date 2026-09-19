@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "pnpm --filter @otto/server dev",
-    "dev:mobile": "pnpm --filter @otto/mobile start",
+    "dev:mobile": "npm --prefix apps/mobile start",
     "fake-device": "pnpm --filter @otto/fake-device start",
     "typecheck": "pnpm -r --no-bail typecheck",
     "smoke": "pnpm --filter @otto/fake-device smoke"
