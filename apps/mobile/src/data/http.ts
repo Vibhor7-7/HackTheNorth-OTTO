@@ -71,6 +71,9 @@ export class HttpOtto implements OttoDataSource {
   private retry = 0;
   private closed = false;
   private device: Device = { connected: false, state: 'idle' };
+  /** Surfaced so a screen can show why it is offline instead of guessing. */
+  lastError?: string;
+  private poller?: ReturnType<typeof setInterval>;
 
   constructor(private config: HttpOttoConfig) {
     this.fetchImpl = config.fetchImpl ?? defaultFetch();
@@ -125,7 +128,10 @@ export class HttpOtto implements OttoDataSource {
       // approval); surfacing that text beats a generic "request failed".
       let detail = '';
       try { detail = ((await res.json()) as { error?: string }).error ?? ''; } catch { /* non-JSON body */ }
-      throw new Error(detail || `${init?.method ?? 'GET'} ${path} failed (${res.status})`);
+      const message = detail || `${init?.method ?? 'GET'} ${path} failed (${res.status})`;
+      console.warn(`[otto] ${message}`);
+      this.lastError = message;
+      throw new Error(message);
     }
     if (res.status === 204) return undefined as T;
     return (await res.json()) as T;
@@ -159,11 +165,16 @@ export class HttpOtto implements OttoDataSource {
 
       this.openEventStream();
     } catch (err) {
-      // A failed first paint is a connection problem, not a broken app: show the
-      // offline state and let the stream's retry bring it back.
+      // A server that is unreachable is a connection problem, not a broken app.
+      // Throwing here put the whole app behind "your demo could not load", which
+      // hid the real cause and gave no way back. Show offline, keep retrying, and
+      // say loudly in the console what actually failed.
+      const why = err instanceof Error ? err.message : String(err);
+      console.warn(`[otto] could not reach ${this.config.baseUrl} - ${why}`);
+      console.warn('[otto] check: same Wi-Fi as the laptop, LAN IP not localhost, server running');
+      this.lastError = why;
       this.publish({ network: 'offline', hydrated: true });
       this.openEventStream();
-      throw err;
     }
   }
 
@@ -191,7 +202,14 @@ export class HttpOtto implements OttoDataSource {
           headers: { Authorization: `Bearer ${this.config.apiKey}`, Accept: 'text/event-stream' },
           signal: controller.signal,
         });
-        if (!res.ok || !res.body) throw new Error(`event stream failed (${res.status})`);
+        if (!res.ok) throw new Error(`event stream failed (${res.status})`);
+        if (!res.body) {
+          // No streaming support in this runtime. Polling is less elegant but it
+          // keeps the app live, which matters more than the transport.
+          console.warn('[otto] no streaming body; falling back to polling');
+          this.startPolling();
+          return;
+        }
 
         this.retry = 0;
         if (this.state.network !== 'online') this.publish({ network: 'online' });
@@ -273,6 +291,34 @@ export class HttpOtto implements OttoDataSource {
     this.emit(event);
   }
 
+  /**
+   * Fallback when the runtime cannot stream. Re-reads the parts of state that
+   * change on their own; a write already refreshes what it touched.
+   */
+  private startPolling(): void {
+    if (this.poller) return;
+    const tick = async () => {
+      try {
+        const [home, device] = await Promise.all([
+          this.request<HomePayload>('/api/home'),
+          this.request<Device>('/api/device'),
+        ]);
+        this.device = device;
+        this.publish({
+          approvals: home.approvals,
+          connections: home.connections,
+          actionItems: home.action_items,
+          tasks: home.recent_tasks,
+          network: 'online',
+        });
+      } catch {
+        this.publish({ network: 'reconnecting' });
+      }
+    };
+    void tick();
+    this.poller = setInterval(tick, 2500);
+  }
+
   private scheduleReconnect(): void {
     this.retry += 1;
     this.publish({ network: this.retry > 3 ? 'offline' : 'reconnecting' });
@@ -283,6 +329,7 @@ export class HttpOtto implements OttoDataSource {
   close(): void {
     this.closed = true;
     this.stream?.abort();
+    if (this.poller) { clearInterval(this.poller); this.poller = undefined; }
   }
 
   // ---- mutations ----------------------------------------------------------
@@ -301,12 +348,30 @@ export class HttpOtto implements OttoDataSource {
   }
 
   connect = async (toolkitId: string) => {
+    // The mock flipped a local flag; a real connection needs the user to sign in
+    // at Composio. So this opens the Connect Link itself - the screen only awaits
+    // and then shows its success state, and a promise that never settles there
+    // leaves the button stuck mid-press.
     const { link } = await this.request<{ link: string }>(`/api/extensions/${toolkitId}/connect`, { method: 'POST' });
-    // The caller opens this; returning through state keeps the interface's void
-    // signature while still making the link reachable.
     this.lastConnectLink = link;
+    try {
+      const browser = require('expo-web-browser') as { openBrowserAsync(url: string): Promise<unknown> };
+      await browser.openBrowserAsync(link);
+    } catch {
+      // Not under Expo, or the browser refused: fall through to Linking.
+      try {
+        const linking = require('react-native').Linking as { openURL(url: string): Promise<unknown> };
+        await linking.openURL(link);
+      } catch {
+        console.warn(`[otto] could not open the connect link, open it manually: ${link}`);
+      }
+    }
+    // Composio tells the server when the user finishes (GET /connect/callback), and
+    // that arrives over SSE. Re-read now as well, so returning from the browser
+    // shows the new status even if the event was missed.
+    await this.refreshExtensions().catch(() => {});
   };
-  /** The most recent Connect Link, for the screen that opened it. */
+  /** The most recent Connect Link, in case a screen wants to show or re-open it. */
   lastConnectLink?: string;
 
   disconnect = async (toolkitId: string) => {
