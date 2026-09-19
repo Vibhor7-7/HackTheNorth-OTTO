@@ -8,6 +8,7 @@ import { ACTIVE, composio, composioConfigured, items, listConnectedAccounts, log
 import { callbackBaseUrl } from "../api/origin";
 import { catalogEntry } from "./catalog";
 import { disableToolkit, enableToolkit } from "../store";
+import { CLAUDE_CODE_TOOLKIT, claudeCodeAvailable, claudeCodeStatus } from "../local/claudeCode";
 
 export type ConnectLinkResult =
   | { outcome: "ok"; link: string; requestId: string }
@@ -21,9 +22,27 @@ export type ConnectLinkResult =
   | { outcome: "error"; message: string };
 
 export async function createConnectLink(toolkit: string): Promise<ConnectLinkResult> {
-  if (!composioConfigured()) return { outcome: "error", message: "COMPOSIO_API_KEY is not set" };
-
   const slug = toolkit.toLowerCase();
+  if (!composioConfigured() && slug !== CLAUDE_CODE_TOOLKIT) {
+    return { outcome: "error", message: "COMPOSIO_API_KEY is not set" };
+  }
+
+  // D-36: Claude Code is switched on here, so the Apps tab's Connect is the whole setup.
+  if (slug === CLAUDE_CODE_TOOLKIT) {
+    if (!claudeCodeAvailable()) {
+      const st = claudeCodeStatus();
+      return {
+        outcome: "error",
+        message: st.version === null
+          ? "the claude command was not found on the server; install Claude Code there"
+          : `CLAUDE_CODE_DIR does not exist on the server: ${st.dir}`,
+      };
+    }
+    enableToolkit(slug);
+    log.info("claude code enabled from the app");
+    return { outcome: "no_auth_needed", toolkit: slug };
+  }
+
   try {
     const configs = items<{ id?: string; toolkit?: { slug?: string } | string; name?: string }>(
       await composio().authConfigs.list({} as never),
@@ -103,8 +122,8 @@ export async function createConnectLink(toolkit: string): Promise<ConnectLinkRes
  * rehearsals: disconnect Gmail and the live Connect Link beat works again (D-16).
  */
 export async function disconnectToolkit(toolkit: string): Promise<number> {
-  if (!composioConfigured()) return 0;
   const slug = toolkit.toLowerCase();
+  if (!composioConfigured() && slug !== CLAUDE_CODE_TOOLKIT) return 0;
   // D-34: a no-auth toolkit has no account to remove; forgetting it is the whole job.
   if (disableToolkit(slug)) { log.info("no-auth toolkit disabled", { toolkit: slug }); return 1; }
   try {

@@ -25,6 +25,7 @@ import { activeToolkitSlugs, composio, items, log } from "./client";
 import { CURATED_TOOLS, rankUncuratedTools } from "./toolkits";
 import { enabledToolkitSlugs } from "../store";
 import { catalog } from "./catalog";
+import { CLAUDE_CODE_SLUG, CLAUDE_CODE_TOOLKIT, claudeCodeEnabled } from "../local/claudeCode";
 
 export interface DiscoveredToolkit {
   slug: string;
@@ -112,8 +113,10 @@ async function availableToolkits(): Promise<{ slug: string; name: string; connec
     }
     // D-34: no-auth toolkits have no auth config; they are enabled in the store.
     for (const slug of enabledToolkitSlugs()) {
+      if (slug === CLAUDE_CODE_TOOLKIT) continue;             // D-36: added below on its own terms
       if (!bySlug.has(slug)) bySlug.set(slug, { slug, name: slug, connected: true });
     }
+    if (claudeCodeEnabled()) bySlug.set(CLAUDE_CODE_TOOLKIT, { slug: CLAUDE_CODE_TOOLKIT, name: "Claude Code", connected: true });
     const out = [...bySlug.values()];
     return out.length ? out : fallback();
   } catch (err) {
@@ -124,8 +127,10 @@ async function availableToolkits(): Promise<{ slug: string; name: string; connec
   }
 }
 
-const fallback = () =>
-  Object.keys(CURATED_TOOLS).map((slug) => ({ slug, name: slug, connected: false }));
+const fallback = () => [
+  ...Object.keys(CURATED_TOOLS).map((slug) => ({ slug, name: slug, connected: false })),
+  ...(claudeCodeEnabled() ? [{ slug: CLAUDE_CODE_TOOLKIT, name: "Claude Code", connected: true }] : []),
+];
 
 /**
  * Best-effort keyword search, purely to widen the candidate set. Returns the
@@ -187,6 +192,7 @@ const TOOLKIT_HINTS: Record<string, string[]> = {
   gmail: ["email", "mail", "inbox", "gmail", "send", "invite", "reply", "forward", "address"],
   github: ["github", "issue", "issues", "repo", "repository", "pull", "pr", "commit", "branch", "notification"],
   linkedin: ["linkedin", "post", "share", "article", "network", "followers", "connections", "profile"],
+  claudecode: ["claude", "code", "codebase", "repo", "bug", "fix", "test", "tests", "refactor", "implement", "function", "file", "typescript", "compile", "lint", "build"],
   // whatsapp is deliberately absent: the toolkit was dropped, so nothing should
   // steer a task towards it even if an auth config lingers in the account.
 };
@@ -202,6 +208,7 @@ function scoreToolkit(slug: string, goal: string, hinted: Set<string>): number {
 }
 
 async function toolsFor(toolkit: string, goal: string): Promise<string[]> {
+  if (toolkit === CLAUDE_CODE_TOOLKIT) return [CLAUDE_CODE_SLUG];
   const curated = CURATED_TOOLS[toolkit];
   if (curated) return curated;
   try {

@@ -40,6 +40,9 @@ export function systemPrompt(
     "  connects it in the app, then the same call runs again by itself. That is expected. Only if the",
     "  tool then reports it is still unavailable, or a permission was refused, call finish and say so.",
     "- When scheduling, always state the day and the clock time back to the user.",
+    "- If CLAUDECODE_RUN is available, it is Claude Code working in the user's project on their laptop.",
+    "  Give it one complete prompt with everything the user said; it is slow, so do not call it in pieces.",
+    "  Report what it says it did, not what you assume it did.",
     "- Call finish exactly once, at the end, whether you succeeded or not.",
   ]
     .filter(Boolean)

@@ -44,6 +44,11 @@ export const TIER_OVERRIDES: Record<string, RiskTier> = {
   // Reads whose slugs match no R0 verb and would fall to the unknown default.
   LINKEDIN_WHO_AM_I: "R0",
   LINKEDIN_GET_POST_CONTENT: "R0",
+
+  // Claude Code (D-36) edits files and runs commands on the user's laptop. RUN
+  // matches no pattern, so this would reach R2 by default; pinned so it cannot
+  // drift, because the approval card carrying the exact prompt is the safeguard.
+  CLAUDECODE_RUN: "R2",
 };
 
 const R2_SLUG = /(SEND|DELETE|REMOVE|PUBLISH|PAY|ORDER|CHECKOUT|POST_|TWEET|PURCHASE|TRANSFER)/;

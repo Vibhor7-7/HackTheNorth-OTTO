@@ -50,6 +50,7 @@ apps/server/src/
   gateway/    device WS + Realtime relay            VG-*
   agent/      task agent loop                       AG-*
   composio/   discovery, connect, execute wrappers  CMP-*
+  local/      tools that run on this laptop (Claude Code)  D-36
   approvals/  risk gate + SMS state machine         AP-*
   extract/    action item extraction worker         ACT-*
   chat/       context agent for the Chat tab        CHAT-*

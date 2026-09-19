@@ -3,6 +3,7 @@
 // cannot, and that is the point.
 
 import { activeToolkitSlugs, composio as composioClient, log, userId as composioUser } from "./client";
+import { CLAUDE_CODE_SLUG, CLAUDE_CODE_TOOLKIT, claudeCodeEnabled, runClaudeCode } from "../local/claudeCode";
 /** CMP-3: 30 s timeout, one retry, structured errors. */
 const TIMEOUT_MS = 30_000;
 
@@ -20,6 +21,16 @@ const NEEDS_AUTH =
   /(no connected account|not connected|connection not found|invalid_grant|unauthorized|401|expired)/i;
 
 export async function executeTool(slug: string, args: unknown, toolkit: string): Promise<ExecuteResult> {
+  // D-36: the one tool that runs on this laptop rather than through Composio.
+  // Same gate, same step log, same tiers; only the executor differs.
+  if (slug === CLAUDE_CODE_SLUG) {
+    if (!claudeCodeEnabled()) return { outcome: "needs_connection", toolkit: CLAUDE_CODE_TOOLKIT };
+    const r = await runClaudeCode(args);
+    return r.ok
+      ? { outcome: "ok", data: r }
+      : { outcome: "error", message: r.summary };
+  }
+
   let last = "";
 
   // One retry: Composio occasionally 5xxs on a cold toolkit, and the venue
@@ -76,6 +87,7 @@ let connectedCache: { at: number; slugs: Set<string> } | undefined;
 const CONNECTED_TTL_MS = 5000;
 
 export async function isToolkitConnected(toolkit: string): Promise<boolean> {
+  if (toolkit.toLowerCase() === CLAUDE_CODE_TOOLKIT) return claudeCodeEnabled();
   // Cached briefly: this runs on every failed call, and the Composio key rate
   // limits hard enough to start returning 401 under load.
   if (connectedCache && Date.now() - connectedCache.at < CONNECTED_TTL_MS) {

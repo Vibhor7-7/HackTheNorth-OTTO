@@ -9,6 +9,7 @@
 
 import type { CatalogEntry } from "@otto/shared";
 import { composio, composioConfigured, items, log } from "./client";
+import { CLAUDE_CODE_TOOLKIT, claudeCodeStatus } from "../local/claudeCode";
 
 interface RawToolkit {
   slug?: string;
@@ -83,7 +84,7 @@ export async function catalog(): Promise<CatalogEntry[]> {
 
 /** Name, slug and category match, most used first (the catalogue is already sorted by usage). */
 export async function searchCatalog(q: string, limit = 30): Promise<CatalogEntry[]> {
-  const all = await catalog();
+  const all = [localEntry(), ...(await catalog())];
   const needle = q.trim().toLowerCase();
   if (!needle) return all.slice(0, limit);
   const words = needle.split(/\s+/).filter(Boolean);
@@ -93,6 +94,22 @@ export async function searchCatalog(q: string, limit = 30): Promise<CatalogEntry
       return words.every((w) => hay.includes(w));
     })
     .slice(0, limit);
+}
+
+/** D-36: Claude Code is not in Composio's catalogue, but it belongs in ours. */
+function localEntry(): CatalogEntry {
+  const st = claudeCodeStatus();
+  return {
+    slug: CLAUDE_CODE_TOOLKIT,
+    name: "Claude Code",
+    description: st.available
+      ? `Engineering work in ${st.dir} on the server's laptop. Every run needs your approval.`
+      : "Not installed on the server.",
+    tool_count: 1,
+    categories: ["developer", "coding", "engineering"],
+    // "none": Connect enables it with no sign-in; "custom" when it cannot be enabled from here.
+    auth: st.available ? "none" : "custom",
+  };
 }
 
 export async function catalogEntry(slug: string): Promise<CatalogEntry | undefined> {
