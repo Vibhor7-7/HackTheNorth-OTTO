@@ -1,3 +1,23 @@
-export const colors = { bone: '#F3EFE6', ink: '#241C29', signal: '#D54031', pine: '#286951', muted: '#746B73', line: '#D8D0C9', paper: '#FBF8F1', pale: '#E8E1D7' };
-export const fonts = { display: 'BricolageGrotesque_600SemiBold', body: 'PublicSans_400Regular', medium: 'PublicSans_600SemiBold' };
-export const motion = { quick: 160, enter: 320, scene: 480 };
+import { Platform } from "react-native";
+
+export const colors = {
+  background: "#080B0A",
+  surface: "#1B201E",
+  raised: "#272E2A",
+  text: "#F4F7F5",
+  muted: "#A3ADA7",
+  line: "#303B34",
+  accent: "#A3E9C5",
+  accentSurface: "#173E2D",
+  onAccent: "#0A271A",
+  success: "#A3E9C5",
+  warning: "#F2C784",
+  danger: "#FF9D9A",
+};
+const system = Platform.select({
+  ios: "System",
+  android: "sans-serif",
+  default: "system-ui",
+});
+export const fonts = { display: system, body: system, medium: system };
+export const motion = { quick: 160, enter: 280, scene: 380 };

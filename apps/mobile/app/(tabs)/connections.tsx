@@ -1,35 +1,194 @@
-import React, { useEffect, useState } from 'react';
-import { Pressable, RefreshControl, ScrollView, TextInput, View } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Feather } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Button, Copy, Display, Eyebrow, Masthead, Reveal, Section, s, useOtto } from '../../src/ui';
-import { colors as c, fonts } from '../../src/theme';
-import { otto } from '../../src/data/mock';
-import type { DemoScenario, NetworkState } from '../../src/data/types';
-
-const scenarios: {id:DemoScenario;label:string;detail:string}[] = [{id:'default',label:'A day with Otto',detail:'Approvals, connections & action items'},{id:'coffee',label:'Coffee with Sam',detail:'Clarify → calendar → Gmail → approve'},{id:'food',label:'The lunch request',detail:'Simulated food-order approval'},{id:'failure',label:'When a task fails',detail:'A clear record of what went wrong'},{id:'expired',label:'Time ran out',detail:'An expired approval, safely cancelled'},{id:'empty',label:'A quiet moment',detail:'Nothing needs your attention'}];
+import React, { useState } from "react";
+import { Pressable, RefreshControl, ScrollView, View } from "react-native";
+import { Feather } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  Button,
+  Copy,
+  Header,
+  IconButton,
+  Section,
+  ToolMark,
+  s,
+  useOtto,
+} from "../../src/ui";
+import { colors as c } from "../../src/theme";
+import { otto } from "../../src/data/mock";
 export default function ConnectionsScreen() {
-  const state = useOtto(); const router = useRouter(); const insets = useSafeAreaInsets();
-  const [refreshing,setRefreshing] = useState(false); const [settings,setSettings] = useState(false); const [phone,setPhone] = useState('+1 416 555 0142'); const [server,setServer] = useState('https://demo.otto.local'); const [saved,setSaved] = useState(false);
-  useEffect(() => {void AsyncStorage.getItem('otto-demo-settings').then(value=>{if(value){const v=JSON.parse(value);setPhone(v.phone);setServer(v.server);}}).catch(()=>{});},[]);
-  const recent = [...state.tasks].sort((a,b)=>b.updated_at.localeCompare(a.updated_at)).flatMap(t=>t.toolkits_used.map(x=>x.toLowerCase()));
-  const extensions = [...state.extensions].sort((a,b)=> {const ai=recent.indexOf(a.id.toLowerCase());const bi=recent.indexOf(b.id.toLowerCase());return (ai<0?999:ai)-(bi<0?999:bi);});
-  const connected = extensions.filter(x=>x.status==='connected').length;
-  return <View style={[s.page,{paddingTop:insets.top}]}><ScrollView contentContainerStyle={s.content} refreshControl={<RefreshControl refreshing={refreshing} tintColor={c.signal} onRefresh={async()=>{setRefreshing(true);try{await otto.getHome();}finally{setRefreshing(false);}}}/>}>
-    <Masthead title={'More reach.\nSame Otto.'} subtitle="The tools behind your intentions. You decide what Otto can reach." />
-    <View style={{flexDirection:'row',alignItems:'baseline',gap:12,paddingBottom:24,borderBottomWidth:1,borderColor:c.ink}}><Display style={{fontSize:76,letterSpacing:-5}}>{String(connected).padStart(2,'0')}</Display><View style={{flex:1}}><Eyebrow>Connected tools</Eyebrow><Copy style={{color:c.muted,fontSize:13,marginTop:5}}>All connections are simulated.</Copy></View><Feather name="git-merge" size={36} color={c.signal}/></View>
-    <View style={{marginTop:26}}><Eyebrow>Recently used first</Eyebrow></View>
-    {extensions.map((extension,index)=><Reveal key={extension.id} delay={Math.min(index,3)*50}><View style={s.row}><View style={{flexDirection:'row',alignItems:'flex-start',gap:16}}><View style={{width:42,height:48,alignItems:'center',justifyContent:'center'}}><Feather name={extension.name.toLowerCase().includes('mail')?'mail':extension.name.toLowerCase().includes('calendar')?'calendar':extension.name.toLowerCase().includes('shop')?'shopping-bag':extension.name.toLowerCase().includes('notion')?'file-text':'box'} size={29} color={c.ink}/></View><View style={{flex:1}}><Display style={{fontSize:28}}>{extension.name}</Display><Copy style={{fontSize:13,color:c.muted,marginTop:5}}>{extension.description}</Copy><Copy style={{fontSize:12,color:extension.status==='connected'?c.pine:extension.status==='needs_auth'?c.signal:c.muted,marginTop:10,fontFamily:fonts.medium}}>{extension.status==='connected'?'Connected':extension.status==='needs_auth'?'Needs your connection':'Suggested'} · {extension.tool_count} tools</Copy></View></View><View style={{marginTop:18,marginLeft:58}}>{extension.status==='connected'?<Button label="Disconnect" quiet onPress={()=>otto.disconnect(extension.id)}/>:<Button label={extension.status==='needs_auth'?'Reconnect':'Connect'} icon="arrow-up-right" onPress={()=>router.push({pathname:'/connect/[id]',params:{id:extension.id}})}/>}</View></View></Reveal>)}
-    <Section title="Your button." aside="Demo device"/>
-    <View style={{backgroundColor:c.ink,padding:24,borderRadius:8}}><View style={{flexDirection:'row',alignItems:'center',gap:20}}><View style={{width:62,height:62,borderRadius:31,borderWidth:1,borderColor:c.muted,alignItems:'center',justifyContent:'center'}}><View style={{width:32,height:32,borderRadius:16,backgroundColor:c.signal}}/></View><View style={{flex:1}}><Display style={{fontSize:27,color:c.bone}}>Otto One</Display><Copy style={{color:c.bone,fontSize:13,marginTop:5}}>{state.network==='online'?'Connected · idle':state.network==='offline'?'Disconnected':'Reconnecting'}</Copy></View></View><View style={{marginTop:24,flexDirection:'row',justifyContent:'space-between'}}><Copy style={{color:c.bone,fontSize:12}}>Last seen: demo session</Copy><Copy style={{color:c.bone,fontSize:12}}>84% battery</Copy></View></View>
-    <Section title="Behind the demo."/>
-    <Copy style={{color:c.muted,marginBottom:20}}>Local data, real interactions. No messages are sent and no external accounts are changed.</Copy>
-    <Button label={settings?'Close settings':'Device & demo settings'} quiet icon={settings?'minus':'plus'} onPress={()=>setSettings(!settings)}/>
-    {settings && <Reveal><View style={{paddingTop:26}}><Eyebrow>Demo mode · on</Eyebrow><Copy style={{marginTop:20,marginBottom:8}}>SMS number</Copy><TextInput accessibilityLabel="Demo SMS number" value={phone} onChangeText={v=>{setPhone(v);setSaved(false);}} keyboardType="phone-pad" style={s.input}/><Copy style={{marginTop:18,marginBottom:8}}>Future server URL</Copy><TextInput accessibilityLabel="Future server URL" value={server} onChangeText={v=>{setServer(v);setSaved(false);}} autoCapitalize="none" autoCorrect={false} keyboardType="url" style={s.input}/><Copy style={{color:c.muted,fontSize:12,marginVertical:12}}>Saved on this phone for the demo. No server connection is made.</Copy><Button label={saved?'Settings saved':'Save demo settings'} onPress={async()=>{await AsyncStorage.setItem('otto-demo-settings',JSON.stringify({phone,server}));setSaved(true);}}/>
-      <View style={{marginTop:32,marginBottom:14}}><Eyebrow>Connection state</Eyebrow></View><View style={{flexDirection:'row',flexWrap:'wrap',gap:8}}>{(['online','offline','reconnecting'] as NetworkState[]).map(network=><Pressable key={network} accessibilityRole="button" accessibilityState={{selected:state.network===network}} onPress={()=>otto.setNetwork(network)} style={{paddingHorizontal:14,paddingVertical:12,borderWidth:1,borderColor:c.ink,backgroundColor:state.network===network?c.ink:'transparent',borderRadius:5}}><Copy style={{fontSize:13,color:state.network===network?c.bone:c.ink,textTransform:'capitalize'}}>{network}</Copy></Pressable>)}</View>
-      <View style={{marginTop:32,marginBottom:8}}><Eyebrow>Start a scenario</Eyebrow></View><Copy style={{fontSize:13,color:c.muted,marginBottom:10}}>Choosing a story resets tasks, notes and chat to its starting state.</Copy>{scenarios.map(scenario=><View key={scenario.id} style={s.row}><Copy style={{fontSize:17,fontFamily:fonts.medium}}>{scenario.label}</Copy><Copy style={{fontSize:13,color:c.muted,marginTop:4,marginBottom:14}}>{scenario.detail}</Copy><Button label={`Load ${scenario.label}`} quiet icon="rotate-ccw" onPress={async()=>{await otto.reset(scenario.id);router.push('/');}}/></View>)}
-    </View></Reveal>}
-  </ScrollView></View>;
+  const state = useOtto();
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const [refreshing, setRefreshing] = useState(false);
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const recent = [...state.tasks]
+    .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
+    .flatMap((t) => t.toolkits_used.map((x) => x.toLowerCase()));
+  const tools = [...state.extensions].sort(
+    (a, b) =>
+      (recent.indexOf(a.id) < 0 ? 999 : recent.indexOf(a.id)) -
+      (recent.indexOf(b.id) < 0 ? 999 : recent.indexOf(b.id)),
+  );
+  const connected = tools.filter((t) => t.status === "connected");
+  const suggested = tools.filter((t) => t.status === "suggested");
+  const open = (id: string) =>
+    router.push({ pathname: "/connect/[id]", params: { id } });
+  return (
+    <View style={[s.page, { paddingTop: insets.top }]}>
+      <ScrollView
+        contentContainerStyle={s.content}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            tintColor={c.accent}
+            onRefresh={async () => {
+              setRefreshing(true);
+              try {
+                await otto.getHome();
+              } finally {
+                setRefreshing(false);
+              }
+            }}
+          />
+        }
+      >
+        <Header
+          title="Apps"
+          right={
+            <IconButton
+              name="settings"
+              label="Settings"
+              onPress={() => router.push("/settings")}
+            />
+          }
+        />
+        {tools
+          .filter((t) => t.status === "needs_auth")
+          .map((tool) => (
+            <View
+              key={tool.id}
+              style={[
+                s.card,
+                { backgroundColor: c.accentSurface, marginBottom: 14 },
+              ]}
+            >
+              <View
+                style={{ flexDirection: "row", gap: 14, alignItems: "center" }}
+              >
+                <ToolMark id={tool.id} size={46} />
+                <View style={{ flex: 1 }}>
+                  <Copy style={{ fontSize: 19, fontWeight: "600" }}>
+                    {tool.name}
+                  </Copy>
+                  <Copy style={{ color: c.accent, marginTop: 3 }}>
+                    Needs your sign-in to continue
+                  </Copy>
+                </View>
+              </View>
+              <View style={{ alignSelf: "flex-start", marginTop: 18 }}>
+                <Button label="Sign in" onPress={() => open(tool.id)} />
+              </View>
+            </View>
+          ))}
+        <Section title="Connected" aside={String(connected.length)} />
+        <View style={s.group}>
+          {connected.map((tool, i) => (
+            <View key={tool.id}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={tool.name + " connection details"}
+                onPress={() =>
+                  setExpanded(expanded === tool.id ? null : tool.id)
+                }
+                style={{
+                  padding: 18,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 13,
+                  borderBottomWidth: i < connected.length - 1 ? 1 : 0,
+                  borderColor: c.line,
+                }}
+              >
+                <ToolMark id={tool.id} />
+                <View style={{ flex: 1 }}>
+                  <Copy style={{ fontWeight: "600", fontSize: 17 }}>
+                    {tool.name}
+                  </Copy>
+                  <Copy style={{ color: c.muted, marginTop: 3 }}>
+                    {tool.tool_count} tools available
+                  </Copy>
+                </View>
+                <Feather name="check-circle" size={22} color={c.accent} />
+              </Pressable>
+              {expanded === tool.id && (
+                <View style={{ padding: 18, paddingTop: 2 }}>
+                  <Copy style={{ color: c.muted, marginBottom: 14 }}>
+                    {tool.description}
+                  </Copy>
+                  <Button
+                    label="Disconnect"
+                    destructive
+                    onPress={() => otto.disconnect(tool.id)}
+                  />
+                </View>
+              )}
+            </View>
+          ))}
+          {!connected.length && (
+            <Copy style={{ padding: 20, color: c.muted }}>
+              No connected apps.
+            </Copy>
+          )}
+        </View>
+        <Section title="Suggested apps" />
+        <View style={s.group}>
+          {suggested.map((tool, i) => (
+            <View
+              key={tool.id}
+              style={{
+                padding: 18,
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 12,
+                borderBottomWidth: i < suggested.length - 1 ? 1 : 0,
+                borderColor: c.line,
+              }}
+            >
+              <ToolMark id={tool.id} />
+              <View style={{ flex: 1 }}>
+                <Copy style={{ fontSize: 17, fontWeight: "600" }}>
+                  {tool.name}
+                </Copy>
+                <Copy style={{ color: c.muted, fontSize: 15, marginTop: 3 }}>
+                  {tool.description}
+                </Copy>
+              </View>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={"Add " + tool.name}
+                onPress={() => open(tool.id)}
+                style={{
+                  backgroundColor: c.raised,
+                  borderRadius: 22,
+                  paddingHorizontal: 16,
+                  minHeight: 44,
+                  justifyContent: "center",
+                }}
+              >
+                <Copy style={{ color: c.accent, fontWeight: "600" }}>Add</Copy>
+              </Pressable>
+            </View>
+          ))}
+          {!suggested.length && (
+            <Copy style={{ padding: 20, color: c.muted }}>
+              All available apps are connected.
+            </Copy>
+          )}
+        </View>
+        <Copy style={{ color: c.muted, marginTop: 18, fontSize: 14 }}>
+          Demo connections. No accounts are linked.
+        </Copy>
+      </ScrollView>
+    </View>
+  );
 }

@@ -1,33 +1,493 @@
-import { useEffect, useState } from 'react';
-import { View, Pressable, RefreshControl, StyleSheet } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
-import { Feather } from '@expo/vector-icons';
-import Animated, { useAnimatedScrollHandler, useAnimatedStyle, useSharedValue, interpolate, Extrapolation, useReducedMotion } from 'react-native-reanimated';
-import { colors as c, fonts } from '../../src/theme';
-import { Copy, Display, Eyebrow, Section, Button, Reveal, NetworkBanner, useOtto, s } from '../../src/ui';
-import { otto } from '../../src/data/mock';
-import type { HomePayload, TaskStatus } from '../../src/data/types';
-const labels: Record<TaskStatus,string>={running:'In motion',needs_input:'A quick question',awaiting_approval:'Needs your say',awaiting_connection:'Needs a connection',succeeded:'Done',failed:'Couldn’t finish',cancelled:'Stopped'};
-export default function Home() {
- const state=useOtto(); const [home,setHome]=useState<HomePayload>(); const [refreshing,setRefreshing]=useState(false);
- useEffect(()=>{void otto.getHome().then(setHome);},[state]);
- const y=useSharedValue(0); const reduced=useReducedMotion(); const scroll=useAnimatedScrollHandler(e=>{y.value=e.contentOffset.y;});
- const masthead=useAnimatedStyle(()=>({opacity:reduced?1:interpolate(y.value,[0,170],[1,.18],Extrapolation.CLAMP),transform:[{translateY:reduced?0:y.value*.22},{scale:reduced?1:interpolate(y.value,[0,180],[1,.88],Extrapolation.CLAMP)}]}));
- const approvals=home?.approvals??[]; const connections=home?.connections??[]; const actions=home?.action_items??[];
- return <SafeAreaView edges={['top']} style={s.page}><NetworkBanner/><Animated.ScrollView onScroll={scroll} scrollEventThrottle={16} refreshControl={<RefreshControl refreshing={refreshing} tintColor={c.signal} onRefresh={async()=>{setRefreshing(true);setHome(await otto.getHome());setRefreshing(false);}}/>} contentContainerStyle={s.content}>
- <Animated.View style={[h.masthead,masthead]}><View style={h.topline}><Eyebrow>Your everyday, in motion</Eyebrow><Copy style={h.demo}>DEMO</Copy></View><View style={h.wordmark}><Display style={h.otto}>otto</Display><View accessibilityLabel="Otto is ready" style={h.imprint}><View style={h.inner}/></View></View><View style={h.caption}><Copy>Less managing.{'\n'}More living.</Copy><Eyebrow>Heard. Understood.{'\n'}Taken care of.</Eyebrow></View></Animated.View>
- <Section title="Needs you" aside={`${approvals.length+connections.length} waiting`}/>
- {!approvals.length&&!connections.length&&<Reveal style={h.empty}><Display style={{fontSize:34}}>Nothing needs you.</Display><Copy style={{marginTop:12,color:c.muted}}>Otto will let you know when that changes.</Copy></Reveal>}
- {approvals.map((a,i)=><Reveal key={a.id} delay={i*60}><Pressable accessibilityRole="button" accessibilityLabel={`Review ${a.summary}`} onPress={()=>router.push({pathname:'/approval/[id]',params:{id:a.id}})} style={({pressed})=>[h.approval,{opacity:pressed?.9:1}]}><View style={h.topline}><Eyebrow light>Your call</Eyebrow><Feather name="arrow-up-right" size={24} color={c.bone}/></View><Display style={h.approvalTitle}>{a.summary}</Display><View style={h.facts}>{Object.entries(a.facts).slice(0,3).map(([key,value])=><View key={key} style={{flexDirection:'row',justifyContent:'space-between',gap:18}}><Copy style={{color:c.bone,opacity:.8,fontSize:12}}>{key}</Copy><Copy style={{color:c.bone,textAlign:'right',flex:1,fontFamily:fonts.medium}}>{value}</Copy></View>)}</View><View style={h.approvalFoot}><Copy style={{color:c.bone,fontFamily:fonts.medium}}>Review & decide</Copy><View style={h.whiteDot}><Feather name="arrow-right" color={c.signal} size={20}/></View></View></Pressable></Reveal>)}
- {connections.map(a=><Reveal key={a.id} style={h.connection}><Eyebrow>One missing piece</Eyebrow><Display style={{fontSize:29,marginTop:12}}>Let’s connect {a.toolkit}.</Display><Copy style={{color:c.muted,marginTop:10,marginBottom:20}}>Otto needs this tool to continue your request. You stay in control.</Copy><Button label={`Connect ${a.toolkit}`} icon="arrow-up-right" onPress={()=>router.push({pathname:'/connect/[id]',params:{id:a.toolkit}})}/></Reveal>)}
- <Section title="Picked up along the way" aside={`${actions.length}`}/>
- {!actions.length&&<Copy style={{color:c.muted}}>No open action items. Ideas from your conversations will land here.</Copy>}
- {actions.map(a=><Reveal key={a.id} style={s.row}><View style={h.topline}><Eyebrow>Possible next step</Eyebrow><Copy style={{fontSize:12,color:c.muted}}>{Math.round(a.confidence*100)}% confidence</Copy></View><Display style={{fontSize:25,marginTop:12}}>{a.title}</Display><Copy style={{marginTop:12,color:c.muted}}>“{a.snippet}”</Copy><View style={{flexDirection:'row',gap:10,marginTop:20}}><Button label="Do it" icon="arrow-right" onPress={async()=>{const id=await otto.doAction(a.id);router.push({pathname:'/task/[id]',params:{id}});}}/><Button label="Dismiss" quiet onPress={()=>otto.dismissAction(a.id)}/></View></Reveal>)}
- <Section title="The record" aside="Recent activity"/>
- {(home?.recent_tasks??[]).map((task,i)=><Pressable key={task.id} accessibilityRole="button" onPress={()=>router.push({pathname:'/task/[id]',params:{id:task.id}})} style={h.task}><Copy style={{width:25,fontSize:12,color:c.muted}}>{String(i+1).padStart(2,'0')}</Copy><View style={{flex:1,gap:8}}><Copy style={{fontFamily:fonts.medium,fontSize:17}}>{task.goal}</Copy><Copy style={{fontSize:12,color:task.status==='succeeded'?c.pine:c.muted}}>{labels[task.status]} · {task.source.replace('_',' ')}</Copy></View><Feather name="arrow-up-right" color={c.ink} size={19}/></Pressable>)}
- {!home?.recent_tasks.length&&<Copy style={{color:c.muted}}>Your next request starts a new story.</Copy>}
- <View style={{paddingTop:36}}><Eyebrow>Captured in the moment. Handled by Otto.</Eyebrow></View>
- </Animated.ScrollView></SafeAreaView>;
+import { useEffect, useState } from "react";
+import { View, Pressable, RefreshControl, StyleSheet } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { router } from "expo-router";
+import { Feather } from "@expo/vector-icons";
+import Animated, {
+  useAnimatedScrollHandler,
+  useAnimatedStyle,
+  useSharedValue,
+  interpolate,
+  Extrapolation,
+  useReducedMotion,
+} from "react-native-reanimated";
+import { colors as c } from "../../src/theme";
+import {
+  Copy,
+  Display,
+  Section,
+  Button,
+  Reveal,
+  NetworkBanner,
+  ToolMark,
+  useOtto,
+  s,
+} from "../../src/ui";
+import { GlassChrome } from "../../src/glass";
+import { otto } from "../../src/data/mock";
+import type { Approval, HomePayload, Task } from "../../src/data/types";
+
+function DecisionCard({ approval }: { approval: Approval }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+  const seconds = Math.max(
+    0,
+    Math.ceil((Date.parse(approval.expires_at) - now) / 1000),
+  );
+  const price = approval.facts["New price"];
+  return (
+    <Reveal style={h.decision}>
+      <View style={h.decisionTop}>
+        <View style={h.inline}>
+          <View style={h.dot} />
+          <Copy style={{ fontWeight: "600", color: c.accent }}>Needs you</Copy>
+        </View>
+        <Copy style={{ color: c.accent, fontVariant: ["tabular-nums"] }}>
+          {Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, "0")}{" "}
+          left
+        </Copy>
+      </View>
+      <View style={{ padding: 22, gap: 18 }}>
+        <Display style={{ fontSize: 25, lineHeight: 30, letterSpacing: -0.7 }}>
+          {approval.summary}
+        </Display>
+        {price ? (
+          <View style={[h.inline, { alignItems: "baseline", flexWrap: "wrap" }]}>
+            <Copy
+              style={{
+                fontSize: 20,
+                color: c.muted,
+                textDecorationLine: "line-through",
+              }}
+            >
+              {approval.facts["Current price"]}
+            </Copy>
+            <Feather name="arrow-right" size={20} color={c.accent} />
+            <Display style={{ fontSize: 34, color: c.accent }}>{price}</Display>
+          </View>
+        ) : (
+          <Copy numberOfLines={2} style={{ color: c.muted }}>
+            {approval.facts.To ??
+              approval.facts.Restaurant ??
+              Object.values(approval.facts)[0]}
+          </Copy>
+        )}
+        <Button
+          label="Review"
+          icon="arrow-up-right"
+          onPress={() =>
+            router.push({
+              pathname: "/approval/[id]",
+              params: { id: approval.id },
+            })
+          }
+        />
+      </View>
+    </Reveal>
+  );
 }
-const h=StyleSheet.create({masthead:{paddingTop:22,paddingBottom:12},topline:{flexDirection:'row',justifyContent:'space-between',alignItems:'center',gap:12},demo:{fontSize:10,letterSpacing:1.3,color:c.signal,fontFamily:fonts.medium},wordmark:{flexDirection:'row',alignItems:'center',justifyContent:'space-between',paddingTop:14},otto:{fontSize:120,letterSpacing:-9,lineHeight:138},imprint:{width:82,height:82,borderRadius:41,borderWidth:1,borderColor:c.signal,alignItems:'center',justifyContent:'center',transform:[{rotate:'-25deg'}]},inner:{width:60,height:60,borderRadius:30,backgroundColor:c.signal,borderWidth:7,borderColor:c.bone},caption:{flexDirection:'row',justifyContent:'space-between',alignItems:'flex-end',gap:20},approval:{backgroundColor:c.signal,borderRadius:10,padding:24,marginBottom:16},approvalTitle:{fontSize:35,color:c.bone,marginTop:30,marginBottom:24,lineHeight:38},facts:{gap:12,paddingTop:18,borderTopWidth:1,borderTopColor:'#E57768'},approvalFoot:{flexDirection:'row',alignItems:'center',justifyContent:'space-between',marginTop:28},whiteDot:{width:40,height:40,borderRadius:20,backgroundColor:c.bone,justifyContent:'center',alignItems:'center'},connection:{borderWidth:1,borderColor:c.line,padding:24,borderRadius:8,marginBottom:12},empty:{paddingVertical:32,borderTopWidth:1,borderBottomWidth:1,borderColor:c.line},task:{flexDirection:'row',gap:12,paddingVertical:24,borderBottomWidth:1,borderColor:c.line}});
+
+function TaskRow({ task, last = false }: { task: Task; last?: boolean }) {
+  const complete = task.status === "succeeded";
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={() =>
+        router.push({ pathname: "/task/[id]", params: { id: task.id } })
+      }
+      style={({ pressed }) => [
+        h.taskRow,
+        {
+          opacity: pressed ? 0.65 : 1,
+          borderBottomWidth: last ? 0 : StyleSheet.hairlineWidth,
+        },
+      ]}
+    >
+      <View
+        style={{
+          width: 30,
+          height: 30,
+          borderRadius: 15,
+          backgroundColor: complete ? c.accentSurface : c.raised,
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <Feather
+          name={
+            complete
+              ? "check"
+              : task.status === "failed"
+                ? "alert-circle"
+                : "minus"
+          }
+          size={18}
+          color={complete ? c.accent : c.warning}
+        />
+      </View>
+      <View style={{ flex: 1, gap: 5 }}>
+        <Copy style={{ fontWeight: "600" }}>{task.goal}</Copy>
+        <Copy style={{ color: c.muted, fontSize: 14 }}>
+          {new Date(task.updated_at).toLocaleTimeString([], {
+            hour: "numeric",
+            minute: "2-digit",
+          })}
+          {!complete
+            ? ` · ${task.status === "failed" ? "Failed" : "Cancelled"}`
+            : ""}
+        </Copy>
+      </View>
+      <Feather name="chevron-right" size={17} color={c.muted} />
+    </Pressable>
+  );
+}
+
+export default function Home() {
+  const state = useOtto();
+  const [home, setHome] = useState<HomePayload>();
+  const [refreshing, setRefreshing] = useState(false);
+  useEffect(() => {
+    let active = true;
+    void otto.getHome().then((value) => {
+      if (active) setHome(value);
+    });
+    return () => {
+      active = false;
+    };
+  }, [state]);
+  const y = useSharedValue(0);
+  const reduced = useReducedMotion();
+  const onScroll = useAnimatedScrollHandler((e) => {
+    y.value = e.contentOffset.y;
+  });
+  const titleStyle = useAnimatedStyle(() => ({
+    transform: [
+      {
+        scale: reduced
+          ? 1
+          : interpolate(y.value, [0, 90], [1, 0.92], Extrapolation.CLAMP),
+      },
+    ],
+  }));
+  const approvals = home?.approvals ?? [];
+  const connections = home?.connections ?? [];
+  const items = home?.action_items ?? [];
+  const tasks = home?.recent_tasks ?? [];
+  const running = tasks.filter(
+    (t) => t.status === "running" || t.status === "needs_input",
+  );
+  const today = new Date().toDateString();
+  const done = tasks.filter(
+    (t) =>
+      t.status === "succeeded" &&
+      new Date(t.updated_at).toDateString() === today,
+  );
+  const stopped = tasks.filter(
+    (t) => t.status === "failed" || t.status === "cancelled",
+  );
+  return (
+    <SafeAreaView edges={["top"]} style={s.page}>
+      <NetworkBanner />
+      <Animated.ScrollView
+        onScroll={onScroll}
+        scrollEventThrottle={16}
+        contentContainerStyle={s.content}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            tintColor={c.accent}
+            onRefresh={async () => {
+              setRefreshing(true);
+              try {
+                setHome(await otto.getHome());
+              } finally {
+                setRefreshing(false);
+              }
+            }}
+          />
+        }
+      >
+        <View style={h.header}>
+          <Animated.View style={titleStyle}>
+            <Display style={{ fontSize: 36 }}>Today</Display>
+          </Animated.View>
+          <GlassChrome interactive>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Otto device and demo settings"
+              onPress={() => router.push("/settings")}
+              style={h.device}
+            >
+              <View
+                style={[
+                  h.dot,
+                  {
+                    backgroundColor:
+                      state.network === "online" ? c.accent : c.warning,
+                  },
+                ]}
+              />
+              <Copy style={{ fontWeight: "600", fontSize: 15 }}>Otto</Copy>
+              <Feather name="battery" size={18} color={c.muted} />
+              <Copy style={{ fontSize: 15, color: c.muted }}>84%</Copy>
+            </Pressable>
+          </GlassChrome>
+        </View>
+        <View style={h.date}>
+          <Copy style={{ color: c.muted }}>
+            {new Date().toLocaleDateString(undefined, {
+              weekday: "long",
+              month: "short",
+              day: "numeric",
+            })}
+          </Copy>
+          <Copy style={{ color: c.muted, fontSize: 14 }}>Demo</Copy>
+        </View>
+        {approvals.map((approval) => (
+          <DecisionCard key={approval.id} approval={approval} />
+        ))}
+        {connections.map((connection) => {
+          const extension = state.extensions.find(
+            (e) => e.id === connection.toolkit,
+          );
+          return (
+            <Reveal key={connection.id} style={[s.card, { marginTop: 12 }]}>
+              <View style={h.inline}>
+                <ToolMark id={connection.toolkit} size={44} />
+                <View style={{ flex: 1, gap: 4 }}>
+                  <Copy style={{ fontSize: 19, fontWeight: "600" }}>
+                    Connect {extension?.name ?? connection.toolkit}
+                  </Copy>
+                  <Copy style={{ color: c.muted }}>To continue your task</Copy>
+                </View>
+              </View>
+              <View style={{ marginTop: 18 }}>
+                <Button
+                  label="Connect"
+                  quiet
+                  onPress={() =>
+                    router.push({
+                      pathname: "/connect/[id]",
+                      params: { id: connection.toolkit },
+                    })
+                  }
+                />
+              </View>
+            </Reveal>
+          );
+        })}
+        {!approvals.length && !connections.length && (
+          <Reveal
+            style={[
+              s.card,
+              { backgroundColor: c.accentSurface, paddingVertical: 26 },
+            ]}
+          >
+            <View style={[h.inline, { marginBottom: 16 }]}>
+              <Feather name="check-circle" size={28} color={c.accent} />
+              <Display style={{ fontSize: 25 }}>Nothing needs you</Display>
+            </View>
+            {!!items.length && (
+              <Button
+                label={`${items.length} suggested tasks`}
+                quiet
+                icon="arrow-right"
+                onPress={() => router.push("/(tabs)/tasks")}
+              />
+            )}
+          </Reveal>
+        )}
+        {!!items.length && !!(approvals.length + connections.length) && (
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push("/(tabs)/tasks")}
+            style={h.suggestions}
+          >
+            <Feather name="check-square" size={20} color={c.accent} />
+            <Copy style={{ flex: 1, fontWeight: "500" }}>
+              {items.length} suggested tasks
+            </Copy>
+            <Feather name="arrow-right" size={20} color={c.muted} />
+          </Pressable>
+        )}
+        {!!running.length && (
+          <>
+            <Section title="Running" aside={String(running.length)} />
+            {running.map((task) => {
+              const steps = state.steps.filter(
+                (step) => step.task_id === task.id,
+              );
+              const latest = steps.at(-1);
+              return (
+                <Reveal key={task.id}>
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() =>
+                      router.push({
+                        pathname: "/task/[id]",
+                        params: { id: task.id },
+                      })
+                    }
+                    style={[s.card, { marginBottom: 12 }]}
+                  >
+                    <View style={h.inline}>
+                      <Copy
+                        style={{ flex: 1, fontSize: 19, fontWeight: "600" }}
+                      >
+                        {task.goal}
+                      </Copy>
+                      <Feather
+                        name="arrow-up-right"
+                        size={20}
+                        color={c.accent}
+                      />
+                    </View>
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        gap: 5,
+                        marginVertical: 18,
+                      }}
+                    >
+                      {Array.from(
+                        { length: Math.min(steps.length + 1, 7) },
+                        (_, index) => (
+                          <View
+                            key={index}
+                            style={{
+                              flex: 1,
+                              height: 4,
+                              borderRadius: 2,
+                              backgroundColor:
+                                index < steps.length ? c.accent : c.line,
+                            }}
+                          />
+                        ),
+                      )}
+                    </View>
+                    <View style={h.inline}>
+                      {task.toolkits_used.slice(0, 3).map((id) => (
+                        <ToolMark key={id} id={id} size={28} />
+                      ))}
+                      <Copy
+                        numberOfLines={2}
+                        style={{ color: c.muted, flex: 1, fontSize: 15 }}
+                      >
+                        {task.status === "needs_input"
+                          ? "Needs your answer"
+                          : (latest?.summary ?? "Starting")}
+                      </Copy>
+                    </View>
+                  </Pressable>
+                </Reveal>
+              );
+            })}
+          </>
+        )}
+        <Section title="Done today" aside={String(done.length)} />
+        <Reveal style={s.group}>
+          {done.length ? (
+            done.map((task, index) => (
+              <TaskRow
+                key={task.id}
+                task={task}
+                last={index === done.length - 1}
+              />
+            ))
+          ) : (
+            <View style={{ padding: 24 }}>
+              <Copy style={{ color: c.muted }}>No completed tasks yet.</Copy>
+            </View>
+          )}
+        </Reveal>
+        {!!stopped.length && (
+          <>
+            <Section title="Stopped" />
+            <View style={s.group}>
+              {stopped.map((task, index) => (
+                <TaskRow
+                  key={task.id}
+                  task={task}
+                  last={index === stopped.length - 1}
+                />
+              ))}
+            </View>
+          </>
+        )}
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.push("/(tabs)/tasks")}
+          style={{
+            minHeight: 52,
+            marginTop: 14,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <Copy style={{ color: c.accent, fontWeight: "600" }}>
+            All tasks <Feather name="arrow-right" size={16} />
+          </Copy>
+        </Pressable>
+      </Animated.ScrollView>
+    </SafeAreaView>
+  );
+}
+
+const h = StyleSheet.create({
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingTop: 18,
+    gap: 14,
+  },
+  date: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 12,
+    marginBottom: 24,
+  },
+  device: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    minHeight: 46,
+    paddingHorizontal: 15,
+  },
+  dot: { width: 7, height: 7, borderRadius: 4, backgroundColor: c.accent },
+  inline: { flexDirection: "row", alignItems: "center", gap: 12 },
+  decision: {
+    borderRadius: 28,
+    backgroundColor: c.accentSurface,
+    overflow: "hidden",
+    marginBottom: 4,
+  },
+  decisionTop: {
+    paddingHorizontal: 22,
+    paddingVertical: 15,
+    backgroundColor: "#204B37",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 12,
+  },
+  suggestions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 22,
+    paddingHorizontal: 4,
+  },
+  taskRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 20,
+    paddingHorizontal: 18,
+    gap: 13,
+    borderColor: c.line,
+  },
+});

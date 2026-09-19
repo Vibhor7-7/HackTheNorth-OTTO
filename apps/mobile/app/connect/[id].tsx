@@ -1,12 +1,107 @@
-import { useState } from 'react';
-import { ScrollView, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { router, useLocalSearchParams } from 'expo-router';
-import { Feather } from '@expo/vector-icons';
-import * as Haptics from 'expo-haptics';
-import { colors as c } from '../../src/theme';
-import { Copy, Display, Eyebrow, Button, Reveal, useOtto, s } from '../../src/ui';
-import { otto } from '../../src/data/mock';
-export default function ConnectScreen(){const{id}=useLocalSearchParams<{id:string}>();const state=useOtto();const [done,setDone]=useState(false);const ext=state.extensions.find(e=>e.id.toLowerCase()===id.toLowerCase()||e.name.toLowerCase()===id.toLowerCase()); const name=ext?.name??id;const request=state.connections.find(r=>r.toolkit.toLowerCase()===id.toLowerCase());
- return <SafeAreaView style={s.page}><ScrollView contentContainerStyle={[s.content,{paddingTop:12}]}><Button label="Back" quiet onPress={()=>router.back()}/><Reveal><View style={{marginTop:56,marginBottom:40,flexDirection:'row',alignItems:'center'}}><View style={{width:80,height:80,borderRadius:40,backgroundColor:done?c.pine:c.ink,alignItems:'center',justifyContent:'center'}}><Feather name={done?'check':'link'} size={30} color={c.bone}/></View><View style={{height:1,flex:1,backgroundColor:c.line}}/><Display style={{fontSize:60}}>otto</Display></View><Eyebrow>{done?'Connection complete':'A new connection'} / Demo</Eyebrow><Display style={{fontSize:44,marginTop:20}}>{done?`${name}, ready to go.`:`Give Otto a hand with ${name}.`}</Display><Copy style={{marginTop:24,color:c.muted,fontSize:18,lineHeight:28}}>{done?'Your task can continue. You can disconnect this tool at any time.':ext?.description??'Otto needs access to this tool to continue your request.'}</Copy><View style={{marginVertical:36,paddingVertical:24,borderTopWidth:1,borderBottomWidth:1,borderColor:c.line,gap:14}}><Eyebrow>What you’re connecting</Eyebrow><Copy>{name} · {ext?.tool_count??0} available tools</Copy><Copy>This is a simulated connection. No sign-in or access to your real account is requested.</Copy></View>{done?<Button label={request?'Return to task':'Back to Connections'} onPress={()=>request?router.replace({pathname:'/task/[id]',params:{id:request.task_id}}):router.replace('/(tabs)/connections')}/>:<Button label={`Simulate connecting ${name}`} disabled={state.network!=='online'} icon="arrow-right" onPress={async()=>{await otto.connect(ext?.id??id);setDone(true);void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);}}/>}</Reveal></ScrollView></SafeAreaView>;
+import { useState } from "react";
+import { ScrollView, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { router, useLocalSearchParams } from "expo-router";
+import { Feather } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
+import { colors as c } from "../../src/theme";
+import {
+  Copy,
+  Display,
+  Header,
+  IconButton,
+  Button,
+  ToolMark,
+  useOtto,
+  s,
+} from "../../src/ui";
+import { otto } from "../../src/data/mock";
+
+export default function ConnectScreen() {
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const state = useOtto();
+  const [done, setDone] = useState(false);
+  const ext = state.extensions.find(
+    (e) =>
+      e.id.toLowerCase() === id.toLowerCase() ||
+      e.name.toLowerCase() === id.toLowerCase(),
+  );
+  const name = ext?.name ?? id;
+  const request = state.connections.find(
+    (r) => r.toolkit.toLowerCase() === id.toLowerCase(),
+  );
+  const task = state.tasks.find((t) => t.id === request?.task_id);
+  const close = () =>
+    router.canGoBack() ? router.back() : router.replace("/(tabs)/connections");
+  return (
+    <SafeAreaView edges={["bottom"]} style={s.page}>
+      <ScrollView contentContainerStyle={[s.content, { paddingBottom: 32 }]}>
+        <Header
+          title={done ? "Connected" : "Connect app"}
+          right={<IconButton name="x" label="Close" onPress={close} />}
+        />
+        <View style={{ alignItems: "center", paddingVertical: 32, gap: 20 }}>
+          <ToolMark id={ext?.id ?? id} size={80} />
+          <Display style={{ fontSize: 30 }}>{name}</Display>
+        </View>
+        <View style={[s.card, { gap: 18 }]}>
+          <View style={{ flexDirection: "row", gap: 14, alignItems: "center" }}>
+            <Feather
+              name={done ? "check-circle" : "link"}
+              size={23}
+              color={c.accent}
+            />
+            <Copy style={{ flex: 1, fontWeight: "600", fontSize: 18 }}>
+              {done
+                ? "Ready for Otto"
+                : `${ext?.tool_count ?? 0} available tools`}
+            </Copy>
+          </View>
+          <Copy style={{ color: c.muted }}>
+            {done
+              ? "Your task can continue."
+              : (task?.goal ?? ext?.description ?? "Connect this app to Otto.")}
+          </Copy>
+        </View>
+        <Copy style={{ color: c.muted, marginVertical: 24 }}>
+          Demo connection. No sign-in or real account access.
+        </Copy>
+        {done ? (
+          <Button
+            label={request ? "View task" : "Done"}
+            icon="check"
+            onPress={() =>
+              request
+                ? router.replace({
+                    pathname: "/task/[id]",
+                    params: { id: request.task_id },
+                  })
+                : close()
+            }
+          />
+        ) : (
+          <Button
+            label={`Connect ${name}`}
+            disabled={state.network !== "online" || !ext}
+            icon="link"
+            onPress={async () => {
+              await otto.connect(ext!.id);
+              setDone(true);
+              void Haptics.notificationAsync(
+                Haptics.NotificationFeedbackType.Success,
+              ).catch(() => {});
+            }}
+          />
+        )}
+        {state.network !== "online" && (
+          <Copy
+            accessibilityRole="alert"
+            style={{ color: c.warning, marginTop: 16 }}
+          >
+            Reconnect to continue.
+          </Copy>
+        )}
+      </ScrollView>
+    </SafeAreaView>
+  );
 }

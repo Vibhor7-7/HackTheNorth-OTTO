@@ -208,7 +208,7 @@ export class MockOtto implements OttoDataSource {
       answer = notes.length ? `Here is the context you gave me:\n\n${notes.map(m => `• ${m.text}`).join('\n')}\n\nThese notes guide this demo. You can edit them in Context.` : 'You have no saved notes yet. Add one in Context and I can use it here.';
     } else if (/commit|week/i.test(text)) {
       const items = this.state.actionItems.filter(a => a.status === 'open');
-      answer = items.length ? `You mentioned ${items.length} things to follow up on:\n\n${items.map(a => `• ${a.title}`).join('\n')}\n\nThey are waiting in Home. Nothing has been started for these yet.` : 'There are no open commitments in this demo right now.';
+      answer = items.length ? `You mentioned ${items.length} things to follow up on:\n\n${items.map(a => `• ${a.title}`).join('\n')}\n\nThey are waiting in Tasks. Nothing has been started for these yet.` : 'There are no open commitments in this demo right now.';
       citations = items.map(a => ({ kind: 'turn', id: a.turn_id }));
     } else if (/open|waiting|left|pending/i.test(text)) {
       const tasks = this.state.tasks.filter(t => !['succeeded', 'cancelled', 'failed'].includes(t.status));
@@ -216,7 +216,7 @@ export class MockOtto implements OttoDataSource {
       citations = tasks.map(t => ({ kind: 'task', id: t.id }));
     } else {
       const tasks = this.state.tasks.slice(0, 3);
-      answer = tasks.length ? `Here is where your day stands:\n\n${tasks.map(t => `• ${t.spoken_summary ?? `${t.goal}: ${t.status.replaceAll('_', ' ')}`}`).join('\n\n')}` : 'Your day is a clean slate in this demo. Try a scenario in Connections, or ask me to schedule a meeting.';
+      answer = tasks.length ? `Here is where your day stands:\n\n${tasks.map(t => `• ${t.spoken_summary ?? `${t.goal}: ${t.status.replaceAll('_', ' ')}`}`).join('\n\n')}` : 'Your day is a clean slate in this demo. Try a scenario in Settings, or ask me to schedule a meeting.';
       citations = tasks.map(t => ({ kind: 'task', id: t.id }));
       const notes = this.state.memories.filter(m => m.source === 'user');
       if (notes[0] && /sam|meeting|coffee/i.test(text)) answer += `\n\nKeeping your note in mind: ${notes[0].text}`;
