@@ -23,28 +23,28 @@ export async function listExtensions(): Promise<Extension[]> {
       activeToolkitSlugs(),
     ]);
 
-    // An auth config exists for every toolkit someone set up in the dashboard.
-    // With an account it is connected; without one it needs auth - which is
-    // exactly the state S0 depends on (D-16).
-    const out = items<{ id?: string; toolkit?: { slug?: string } | string; name?: string }>(configs)
-      .map((c): Extension => {
-        const slug = slugOf(c.toolkit) || (c.name ?? "").toLowerCase();
-        return {
-          id: slug,
-          name: pretty(slug),
-          description: connected.has(slug)
-            ? "Connected. Otto can use this."
-            : "Set up but not connected yet. Otto will ask when it needs this.",
-          status: connected.has(slug) ? "connected" : "needs_auth",
-          tool_count: CURATED_TOOLS[slug]?.length ?? 0,
-        };
-      })
-      .filter((e) => e.id);
+    // A toolkit can have more than one auth config - a managed OAuth one and a
+    // direct-token one, say - but the Connections tab shows one card per toolkit,
+    // so collapse them and let a connection win over a bare config.
+    const byToolkit = new Map<string, Extension>();
+    for (const c of items<{ id?: string; toolkit?: { slug?: string } | string; name?: string }>(configs)) {
+      const slug = slugOf(c.toolkit) || (c.name ?? "").toLowerCase();
+      if (!slug || byToolkit.has(slug)) continue;
+      byToolkit.set(slug, {
+        id: slug,
+        name: pretty(slug),
+        description: connected.has(slug)
+          ? "Connected. Otto can use this."
+          : "Set up but not connected yet. Otto will ask when it needs this.",
+        status: connected.has(slug) ? "connected" : "needs_auth",
+        tool_count: CURATED_TOOLS[slug]?.length ?? 0,
+      });
+    }
 
     // Curated toolkits with no auth config at all are still worth surfacing.
     for (const slug of Object.keys(CURATED_TOOLS)) {
-      if (out.some((e) => e.id === slug)) continue;
-      out.push({
+      if (byToolkit.has(slug)) continue;
+      byToolkit.set(slug, {
         id: slug,
         name: pretty(slug),
         description: "No auth config yet. Create one in the Composio dashboard.",
@@ -52,6 +52,12 @@ export async function listExtensions(): Promise<Extension[]> {
         tool_count: CURATED_TOOLS[slug]!.length,
       });
     }
+
+    // Connected first, then anything waiting on the user, then suggestions.
+    const rank = { connected: 0, needs_auth: 1, suggested: 2 } as const;
+    const out = [...byToolkit.values()].sort(
+      (a, b) => rank[a.status] - rank[b.status] || a.name.localeCompare(b.name),
+    );
 
     return out;
   } catch (err) {
@@ -67,7 +73,8 @@ const slugOf = (tk: { slug?: string } | string | undefined): string =>
 
 const NAMES: Record<string, string> = {
   googlecalendar: "Google Calendar",
-  whatsapp: "WhatsApp",
   gmail: "Gmail",
+  github: "GitHub",
+  whatsapp: "WhatsApp",
 };
 const pretty = (slug: string) => NAMES[slug] ?? slug.replace(/^\w/, (c) => c.toUpperCase());

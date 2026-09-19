@@ -136,6 +136,7 @@ async function searchHint(goal: string): Promise<Set<string>> {
 const SEARCH_TERMS = [
   "calendar", "event", "busy", "free", "message", "email", "send", "contact",
   "attendee", "meeting", "schedule", "invite", "chat", "reminder", "task", "file",
+  "issue", "repository", "pull", "notification", "draft",
 ];
 const keywordQuery = (goal: string): string => {
   const words = new Set(goal.toLowerCase().match(/[a-z]{3,}/g) ?? []);
@@ -145,8 +146,10 @@ const keywordQuery = (goal: string): string => {
 /** Words in the goal that point at a toolkit we know about. */
 const TOOLKIT_HINTS: Record<string, string[]> = {
   googlecalendar: ["calendar", "meeting", "schedule", "invite", "free", "busy", "event", "appointment"],
-  whatsapp: ["whatsapp", "message", "text", "tell", "msg", "dm"],
-  gmail: ["email", "mail", "inbox", "gmail"],
+  gmail: ["email", "mail", "inbox", "gmail", "send", "invite", "reply", "forward", "address"],
+  github: ["github", "issue", "issues", "repo", "repository", "pull", "pr", "commit", "branch", "notification"],
+  // whatsapp is deliberately absent: the toolkit was dropped, so nothing should
+  // steer a task towards it even if an auth config lingers in the account.
 };
 
 function scoreToolkit(slug: string, goal: string, hinted: Set<string>): number {

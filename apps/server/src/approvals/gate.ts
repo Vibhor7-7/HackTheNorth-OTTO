@@ -11,7 +11,7 @@
 import type { RiskTier } from "@otto/shared";
 import { addStep, argsHash, createApproval, createConnectionRequest, updateTask } from "../store";
 import { classify, toolkitOf } from "./tiers";
-import { executeTool } from "../composio/execute";
+import { executeTool, isToolkitConnected } from "../composio/execute";
 import { createConnectLink } from "../composio/connect";
 import { speak } from "../agent/notify";
 import { logger } from "../log";
@@ -47,6 +47,14 @@ export async function gate(req: GateRequest): Promise<GateResult> {
     summary: `${risk} ${req.slug}${req.fast_lane ? " (fast lane)" : ""}`,
     args: req.args,
   });
+
+  // A missing connection outranks an approval. Asking someone to approve an action
+  // that cannot possibly run wastes the one moment of trust the demo has, and it
+  // puts S0's beats in the wrong order: connect first, then approve the send.
+  if (risk === "R2" && !(await isToolkitConnected(toolkit))) {
+    log.info("R2 needs a connection before it can be approved", { task_id: req.task_id, toolkit });
+    return raiseConnection(req, risk, toolkit, step.id, 0);
+  }
 
   // AP-3: R2 never executes here. It stops, and the app asks.
   if (risk === "R2") {
@@ -114,6 +122,29 @@ async function runNow(
   // CMP-4: a missing connection is not a failure. Raise a ConnectionRequest and
   // let the task wait for the user to connect. This is S0.
   if (result.outcome === "needs_connection") {
+    return raiseConnection(req, risk, toolkit, stepId, duration_ms);
+  }
+
+  addStep({
+    task_id: req.task_id,
+    kind: "error",
+    toolkit,
+    tool_slug: req.slug,
+    risk,
+    summary: `${req.slug} failed: ${result.message}`,
+    duration_ms,
+  });
+  return { outcome: "error", risk, message: result.message };
+}
+
+async function raiseConnection(
+  req: GateRequest,
+  risk: RiskTier,
+  toolkit: string,
+  stepId: string,
+  duration_ms: number,
+): Promise<GateResult> {
+  {
     const link = await createConnectLink(toolkit);
     if (link.outcome !== "ok") {
       const message =
@@ -150,17 +181,6 @@ async function runNow(
     log.info("awaiting connection", { task_id: req.task_id, toolkit, connection: cr.id });
     return { outcome: "needs_connection", risk, toolkit, connection_id: cr.id };
   }
-
-  addStep({
-    task_id: req.task_id,
-    kind: "error",
-    toolkit,
-    tool_slug: req.slug,
-    risk,
-    summary: `${req.slug} failed: ${result.message}`,
-    duration_ms,
-  });
-  return { outcome: "error", risk, message: result.message };
 }
 
 /**

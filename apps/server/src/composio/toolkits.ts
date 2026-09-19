@@ -22,10 +22,18 @@ export const CURATED_TOOLS: Record<string, string[]> = {
     "GOOGLECALENDAR_UPDATE_EVENT",
     "GOOGLECALENDAR_DELETE_EVENT",
   ],
-  whatsapp: [
-    "WHATSAPP_SEND_MESSAGE",
-    "WHATSAPP_GET_MESSAGE_HISTORY",
-    "WHATSAPP_GET_PHONE_NUMBERS",
+  gmail: [
+    "GMAIL_SEND_EMAIL",          // R2: held for approval (S0's second beat)
+    "GMAIL_CREATE_EMAIL_DRAFT",  // R1
+    "GMAIL_FETCH_EMAILS",
+    "GMAIL_SEARCH_PEOPLE",       // resolves a name to an address (AG-9)
+    "GMAIL_GET_PROFILE",
+  ],
+  github: [
+    "GITHUB_LIST_ISSUES_ASSIGNED_TO_THE_AUTHENTICATED_USER",
+    "GITHUB_LIST_NOTIFICATIONS_FOR_THE_AUTHENTICATED_USER",
+    "GITHUB_GET_PULL_REQUESTS",
+    "GITHUB_CREATE_AN_ISSUE",    // R1
   ],
 };
 

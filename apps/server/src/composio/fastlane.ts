@@ -16,6 +16,14 @@ export interface FastLaneTool {
   slug: string;
   toolkit: string;
   risk: RiskTier;
+  /**
+   * Arguments merged under whatever the model supplied. These keep the payload
+   * small and the call fast, and they spare the voice model from having to know
+   * pagination fields it would only get wrong.
+   */
+  defaultArgs?: Record<string, unknown>;
+  /** Projects the tool result down to what a spoken answer needs. */
+  shape?: (data: unknown) => unknown;
 }
 
 export const FAST_LANE: Record<string, FastLaneTool> = {
@@ -30,8 +38,61 @@ export const FAST_LANE: Record<string, FastLaneTool> = {
     slug: "GOOGLECALENDAR_EVENTS_LIST",
     toolkit: "googlecalendar",
     risk: "R0",
+    defaultArgs: { calendar_id: "primary", singleEvents: true, orderBy: "startTime", maxResults: 10 },
+    shape: (d) => ({
+      events: list(d, "items").slice(0, 10).map((e) => ({
+        title: e.summary, start: e.start?.dateTime ?? e.start?.date, end: e.end?.dateTime ?? e.end?.date,
+      })),
+    }),
+  },
+
+  // GitHub, read-only (D-27).
+  github_my_issues: {
+    name: "github_my_issues",
+    slug: "GITHUB_LIST_ISSUES_ASSIGNED_TO_THE_AUTHENTICATED_USER",
+    toolkit: "github",
+    risk: "R0",
+    defaultArgs: { state: "open", per_page: 10, filter: "assigned" },
+    shape: (d) => {
+      const issues = list(d, "details", "issues");
+      return {
+        count: issues.length,
+        issues: issues.slice(0, 5).map((i) => ({
+          title: i.title, repo: i.repository?.full_name ?? i.repository_url?.split("/repos/")[1], number: i.number,
+        })),
+      };
+    },
+  },
+  github_notifications: {
+    name: "github_notifications",
+    slug: "GITHUB_LIST_NOTIFICATIONS_FOR_THE_AUTHENTICATED_USER",
+    toolkit: "github",
+    risk: "R0",
+    defaultArgs: { all: false, per_page: 10 },
+    shape: (d) => {
+      const items = list(d, "details", "notifications");
+      return {
+        count: items.length,
+        notifications: items.slice(0, 5).map((n) => ({
+          title: n.subject?.title, repo: n.repository?.full_name, reason: n.reason,
+        })),
+      };
+    },
   },
 };
+
+/**
+ * Composio wraps a tool's payload differently per toolkit, so pull the first
+ * array we recognise rather than assuming one shape.
+ */
+function list(data: unknown, ...keys: string[]): Record<string, any>[] {
+  const d = data as Record<string, any> | undefined;
+  if (!d) return [];
+  if (Array.isArray(d)) return d as Record<string, any>[];
+  for (const k of keys) if (Array.isArray(d[k])) return d[k];
+  for (const v of Object.values(d)) if (Array.isArray(v)) return v as Record<string, any>[];
+  return [];
+}
 
 // Both slugs verified present in the live Google Calendar toolkit (CMP-8).
 //

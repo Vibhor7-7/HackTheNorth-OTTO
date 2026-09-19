@@ -339,8 +339,12 @@ export class DeviceSession {
     const timeout = new Promise<"timeout">((resolve) =>
       setTimeout(() => resolve("timeout"), FAST_LANE_TIMEOUT_MS));
 
+    // The model supplies intent; defaultArgs supply the pagination and scoping it
+    // should not have to guess.
+    const args = { ...(tool.defaultArgs ?? {}), ...(call.args as Record<string, unknown>) };
+
     const outcome = await Promise.race([
-      gate({ task_id, slug: tool.slug, args: call.args, fast_lane: true }),
+      gate({ task_id, slug: tool.slug, args, fast_lane: true }),
       timeout,
     ]);
 
@@ -366,8 +370,11 @@ export class DeviceSession {
       return;
     }
 
+    // Shaped before it goes back, so the model answers from a handful of fields
+    // instead of wading through a 50 KB payload it might read aloud.
+    const shaped = tool.shape ? tool.shape(outcome.result) : outcome.result;
     this.log.info("fast lane hit", { tool: call.name, fast_lane: true, duration_ms: duration });
-    this.respondWithToolOutput(call.callId, outcome.result);
+    this.respondWithToolOutput(call.callId, shaped);
   }
 
   private deferFastLane(call: { name: string; callId: string; args: unknown }, why: string): void {

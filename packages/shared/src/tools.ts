@@ -1,4 +1,4 @@
-// Section 7.4 function tools on the Realtime session. Six tools total.
+// Section 7.4 function tools on the Realtime session. Eight tools total (D-27).
 // All are executed by the gateway, never by the model and never by Composio
 // directly, so nothing bypasses the approval gate (AG-3, D-11, D-23).
 
@@ -38,6 +38,9 @@ export type CalendarFreeBusyResult =
 export type CalendarListEventsResult =
   | { events: { title: string; start: string; end: string; attendees?: string[] }[] }
   | Deferred;
+
+export interface GithubMyIssuesArgs { state?: "open" | "closed" }
+export interface GithubNotificationsArgs { unread_only?: boolean }
 
 export const CONTROL_TOOLS: RealtimeFunctionTool[] = [
   {
@@ -125,5 +128,44 @@ export const FAST_LANE_TOOLS: RealtimeFunctionTool[] = [
   },
 ];
 
-export const FAST_LANE_TOOL_NAMES = new Set(FAST_LANE_TOOLS.map((t) => t.name));
+/**
+ * GitHub, read-only (D-27). Both take no required arguments, which is what makes
+ * them safe on the voice path: the model cannot be expected to know a repo name,
+ * and asking for one would break the single-call rule.
+ */
+export const GITHUB_FAST_LANE_TOOLS: RealtimeFunctionTool[] = [
+  {
+    type: "function",
+    name: "github_my_issues",
+    description:
+      "List GitHub issues assigned to the user. Read-only. Answer directly from the result, " +
+      "naming at most three and saying how many there are in total.",
+    parameters: {
+      type: "object",
+      properties: {
+        state: { type: "string", description: '"open" (default) or "closed".' },
+      },
+      required: [],
+      additionalProperties: false,
+    },
+  },
+  {
+    type: "function",
+    name: "github_notifications",
+    description:
+      "List the user's unread GitHub notifications. Read-only. Answer directly, summarising " +
+      "rather than reading every one aloud.",
+    parameters: {
+      type: "object",
+      properties: {
+        unread_only: { type: "string", description: '"true" (default) or "false".' },
+      },
+      required: [],
+      additionalProperties: false,
+    },
+  },
+];
+
+export const ALL_FAST_LANE_TOOLS = [...FAST_LANE_TOOLS, ...GITHUB_FAST_LANE_TOOLS];
+export const FAST_LANE_TOOL_NAMES = new Set(ALL_FAST_LANE_TOOLS.map((t) => t.name));
 export const FAST_LANE_TIMEOUT_MS = 2500;
