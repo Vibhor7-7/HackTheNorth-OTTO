@@ -238,7 +238,7 @@ Owner: Vibhor.
 | VG-4 | P0 | **Pace downstream audio.** Realtime produces audio faster than real time; device buffer is about 2 s. Queue `response.output_audio.delta` server side, decode base64, send to device no more than 500 ms ahead of real-time playback (proposed). Wrap each response in `speak_start` / `speak_end`. |
 | VG-5 | P0 | Barge-in: `ptt_start` while a response is in flight sends `response.cancel`, drops queued downstream audio, sends `speak_end` with `reason: "interrupted"`. If a fast-lane function call (VG-16) is outstanding, abandon it: ignore its result when it returns, do not send `function_call_output`. |
 | VG-6 | P0 | Register the function tools in 7.4 on the session. On `response.function_call_arguments.done`, route to the Task Agent, return output as a `conversation.item.create` of type `function_call_output`, then `response.create` so the model speaks the acknowledgement. |
-| VG-7 | P0 | Server-initiated speech. When a task completes, needs input, needs approval, or needs a connection, and the device is idle: `conversation.item.create` with the text, then `response.create`. If mid-turn, queue until idle. **Only for a Task with `source: "voice"`** (D-31): a Task started from the Chat tab or from an action item reports in the app over SSE - on Home, per CHAT-4 and APP-13 - and is not read aloud. Filtered in `agent/notify.ts` so no call site can forget. Speech with no `task_id` is Otto on its own behalf (ACT-5) and still speaks. |
+| VG-7 | P0 | Server-initiated speech. When a task completes, needs input, needs approval, or needs a connection, and the device is idle: `conversation.item.create` with the text, then `response.create`. If mid-turn, queue until idle. If the Realtime session has already closed on idle timeout (VG-13) and the device is attached, **reopen it to deliver the result** rather than holding the speech until the next button press: a task routinely outlives the timeout, and a result that waits for the user to ask is a request left hanging. **Only for a Task with `source: "voice"`** (D-31): a Task started from the Chat tab or from an action item reports in the app over SSE - on Home, per CHAT-4 and APP-13 - and is not read aloud. Filtered in `agent/notify.ts` so no call site can forget. Speech with no `task_id` is Otto on its own behalf (ACT-5) and still speaks. |
 | VG-8 | P0 | **Transcription.** `audio.input.transcription` set to `TRANSCRIBE_MODEL`. Persist per turn: user text from `conversation.item.input_audio_transcription.completed`, assistant text from `response.output_audio_transcript.done`. This is what the app shows and what memory is built from (DATA-1). Realtime is the only transcript source (D-13). |
 | VG-9 | P1 | Session resilience: reconnect on drop or expiry, re-seed with user profile plus a two-line summary of the last three turns. Do not assume a session outlives a few minutes idle. |
 | VG-10 | P0 | Session instructions (7.5): one or two spoken sentences, never lists; confirm what was understood before delegating; never claim an action is done until the Task Agent reports it; when delegating say "on it" and stop. User profile (name, timezone, top contacts) is baked into instructions at session start. **No retrieval on the voice path.** |
@@ -643,10 +643,16 @@ Instructions template (VG-10):
 
 ```
 You are Otto, a wearable assistant. The user talks to you through a button on their chest.
+You are warm, friendly and helpful: talk like a capable friend, not a system.
 Reply in one or two short spoken sentences. Never use lists or markdown.
-If the user asks you to do something in the world, call run_task with a clear goal
-and say "On it" or similar. Do not describe what you will do. Do not claim anything
-is done until you are told it is done.
+If the user asks you to do something in the world, call run_task with a clear goal,
+then tell them you are on it in a natural, friendly sentence, for example
+"Looking into that for you, give me a moment." Vary the wording; never repeat the
+same phrase every time. Do not describe the steps you will take. Do not claim
+anything is done until you are told it is done.
+Every request gets an answer. When a task finishes, fails, or needs something from
+the user, you will be told; say so plainly, whether it worked or not, and never
+leave a request hanging.
 If something is ambiguous (which Sam, which date), ask one short question.
 If the user asks to confirm something, say "check the app to confirm."
 If the user asks what you can do, or before you say you cannot do something,
@@ -989,6 +995,11 @@ Judge check-ins: OpenAI, Composio and Expo booths early, and once more after sta
 
 ## 17. Changelog
 
+- **1.9.3**: **Section 7 changed:** the 7.5 instructions template now asks for a
+  warm, varied acknowledgement ("Looking into that for you, give me a moment")
+  instead of "On it", and tells the model every request gets a spoken outcome.
+  VG-7 reopens an idle-closed Realtime session to deliver a result instead of
+  holding it for the next press.
 - **1.9.2**: **Section 7 changed:** `list_capabilities` added as the seventh
   Realtime tool (7.4, D-32) and one sentence added to the 7.5 instructions
   template telling the model to call it before claiming or denying a capability.

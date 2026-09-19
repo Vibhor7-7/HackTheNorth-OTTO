@@ -503,16 +503,24 @@ export class DeviceSession {
   // ---- VG-7 server-initiated speech --------------------------------------
 
   private speak(req: SpeakRequest): void {
-    if (this.state !== "idle" || !this.rt?.isOpen || this.responseInFlight) {
+    if (this.state !== "idle" || this.responseInFlight || !this.device.isAlive()) {
       this.pendingSpeech.push(req);
       return;
     }
+    // A task routinely outlives the 60 s idle timeout (VG-13), and a result that
+    // waits for the next button press is a request left hanging. The device is
+    // idle and attached, so reopen the session to deliver it; the idle timer
+    // closes it again afterwards. Sends queue until the handshake completes.
+    if (!this.rt) this.openSession();
+    const rt = this.rt;
+    if (!rt) { this.pendingSpeech.push(req); return; }
     // The model is told what to say rather than handed a finished line, so the
     // delivery matches the rest of the conversation (VG-10).
-    this.rt.sendAssistantText(
-      `[Otto system] Tell the user, in one short spoken sentence: ${req.text}`,
+    rt.sendAssistantText(
+      `[Otto system] The user asked you for something earlier. Tell them, warmly and in ` +
+      `one or two short spoken sentences, how it went: ${req.text}`,
     );
-    this.rt.createResponse();
+    rt.createResponse();
     this.responseInFlight = true;
 
     // Otto speaking unprompted is still something the Context tab has to show
@@ -533,7 +541,7 @@ export class DeviceSession {
 
   private drainPendingSpeech(): void {
     if (this.pendingSpeech.length === 0) return;
-    if (this.state !== "idle" || !this.rt?.isOpen || this.responseInFlight) return;
+    if (this.state !== "idle" || this.responseInFlight || !this.device.isAlive()) return;
     const next = this.pendingSpeech.shift();
     if (next) this.speak(next);
   }

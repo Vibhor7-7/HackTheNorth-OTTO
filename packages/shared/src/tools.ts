@@ -55,7 +55,8 @@ export const CONTROL_TOOLS: RealtimeFunctionTool[] = [
     name: "run_task",
     description:
       "Hand a real-world task to the task agent. Use this for anything that changes the world " +
-      "or needs an app other than the user's calendar. Returns immediately; say \"on it\" and stop.",
+      "or needs an app other than the user's calendar. Returns immediately; tell the user you are " +
+      "looking into it, in one friendly sentence, and stop. You will be told how it went.",
     parameters: {
       type: "object",
       properties: {
