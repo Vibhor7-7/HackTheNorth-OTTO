@@ -13,6 +13,11 @@ export function extensionRoutes(app: FastifyInstance): void {
   app.post<{ Params: { id: string } }>("/api/extensions/:id/connect", async (req, reply) => {
     const result = await createConnectLink(req.params.id);
     if (result.outcome === "ok") return { link: result.link };
+    if (result.outcome === "already_connected") {
+      // The app's list was stale; correct it over SSE and say so plainly.
+      void publishExtensionStatus(result.toolkit);
+      return reply.code(409).send({ error: `${result.toolkit} is already connected` });
+    }
 
     // Named failures, because "connect failed" is not debuggable on stage.
     const status = result.outcome === "error" ? 502 : 503;

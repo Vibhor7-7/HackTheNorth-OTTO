@@ -173,7 +173,9 @@ async function raiseConnection(
           ? `${toolkit} is not connected, and the Composio API key cannot create a connect link`
           : link.outcome === "no_auth_config"
             ? `${toolkit} has no auth config in Composio`
-            : link.message;
+            : link.outcome === "already_connected"
+              ? `${toolkit} is connected but the account list said otherwise; try again`
+              : link.message;
       addStep({ task_id: req.task_id, kind: "error", toolkit, tool_slug: req.slug, risk, summary: message, duration_ms });
       return { outcome: "error", risk, message };
     }
