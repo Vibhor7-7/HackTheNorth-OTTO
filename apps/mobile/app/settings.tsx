@@ -27,6 +27,7 @@ export default function Settings() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [showScenarios, setShowScenarios] = useState(false);
+  const [overrideError, setOverrideError] = useState("");
   const device = state.device;
   const rows: [string, string][] = [
     [
@@ -143,6 +144,49 @@ export default function Settings() {
           {isLive
             ? "Set with EXPO_PUBLIC_OTTO_URL when the app starts. Demo mode is the server's DEMO_MODE and enables its stage fallbacks."
             : "Set EXPO_PUBLIC_OTTO_URL to run against the real server. Tasks and approvals here only affect local demo data."}
+        </Copy>
+        <Section title="Override" />
+        <View style={[s.card, state.autoApprove ? { borderWidth: 1, borderColor: c.danger } : null]}>
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 12,
+            }}
+          >
+            <View style={{ flex: 1 }}>
+              <Copy style={{ fontWeight: "600" }}>Skip all approvals</Copy>
+              <Copy style={{ color: c.muted, marginTop: 6 }}>
+                Sends, posts, deletes and payments run the moment Otto decides
+                to. Nothing waits for you.
+              </Copy>
+            </View>
+            <Switch
+              accessibilityLabel="Skip all approvals"
+              value={state.autoApprove}
+              onValueChange={(on) => {
+                setOverrideError("");
+                void otto.setAutoApprove(on).catch((err: unknown) => {
+                  setOverrideError(
+                    err instanceof Error ? err.message : "Could not change the override.",
+                  );
+                });
+              }}
+              trackColor={{ true: c.danger, false: c.raised }}
+              thumbColor={state.autoApprove ? c.background : c.muted}
+            />
+          </View>
+          {!!overrideError && (
+            <Copy accessibilityRole="alert" style={{ color: c.danger, marginTop: 12 }}>
+              {overrideError}
+            </Copy>
+          )}
+        </View>
+        <Copy style={{ color: c.muted, fontSize: 14, marginTop: 12 }}>
+          {isLive
+            ? "Every action is still logged in Task detail as auto-approved. Turns itself off when the server restarts."
+            : "In the simulation this only shows the banner; demo approvals still wait for you."}
         </Copy>
         {!isLive && (
           <>

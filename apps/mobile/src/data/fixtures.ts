@@ -8,7 +8,7 @@ export function createFixtures(scenario: DemoScenario = 'default', now = Date.no
     // The simulation has no hardware, so it reports a plausible device: the screen
     // then has the same shape whichever provider is in use.
     device: { connected: true, state: 'idle', last_seen: at(0) },
-    hydrated: false, network: 'online', streaming: false, demoMode: true, messages: [],
+    hydrated: false, network: 'online', streaming: false, demoMode: true, autoApprove: false, messages: [],
     profile: { name: 'Ayush', timezone: 'America/Toronto', contacts: [] }, activeChatId: 'chat-initial', chatSessions: [{ id: 'chat-initial', title: 'New chat', messages: [], created_at: new Date().toISOString(), updated_at: new Date().toISOString() }],
     tasks: [
       task('task-shopify', 'Put the blue hoodie on sale for 20% off', 'awaiting_approval', ['shopify'], 3),

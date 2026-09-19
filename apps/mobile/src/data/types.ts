@@ -13,14 +13,16 @@ export interface ChatMessage { id: string; role: 'user' | 'assistant'; text: str
 export interface ChatSession { id: string; title: string; messages: ChatMessage[]; created_at: string; updated_at: string }
 export interface HomePayload { approvals: Approval[]; connections: ConnectionRequest[]; action_items: ActionItem[]; recent_tasks: Task[] }
 export interface Profile { name: string; timezone: string; role?: string; contacts: { name: string; email?: string; note?: string }[]; preferences?: string; handles?: { github?: string } }
+export interface Settings { auto_approve: boolean; demo_mode: boolean }
 export interface Device { connected: boolean; state: string; last_seen?: string; battery?: number; fw?: string }
-type EventMap = { 'task.created': Task; 'task.updated': Task; 'step.created': TaskStep; 'turn.created': Turn; 'turn.updated': Turn; 'approval.created': Approval; 'approval.updated': Approval; 'connection.created': ConnectionRequest; 'connection.updated': ConnectionRequest; 'action_item.created': ActionItem; 'action_item.updated': ActionItem; 'memory.created': Memory; 'device.updated': Device; 'extension.updated': Extension };
+type EventMap = { 'task.created': Task; 'task.updated': Task; 'step.created': TaskStep; 'turn.created': Turn; 'turn.updated': Turn; 'approval.created': Approval; 'approval.updated': Approval; 'connection.created': ConnectionRequest; 'connection.updated': ConnectionRequest; 'action_item.created': ActionItem; 'action_item.updated': ActionItem; 'memory.created': Memory; 'device.updated': Device; 'extension.updated': Extension; 'settings.updated': Settings };
 export type OttoEvent = { [K in keyof EventMap]: { type: K; data: EventMap[K] } }[keyof EventMap];
 export type NetworkState = 'online' | 'offline' | 'reconnecting';
 export type DemoScenario = 'default' | 'coffee' | 'food' | 'empty' | 'expired' | 'failure';
 export interface DemoState { device: Device; tasks: Task[]; steps: TaskStep[]; approvals: Approval[]; connections: ConnectionRequest[]; actionItems: ActionItem[]; turns: Turn[]; memories: Memory[]; extensions: Extension[]; messages: ChatMessage[]; chatSessions: ChatSession[]; activeChatId: string; network: NetworkState; streaming: boolean; hydrated: boolean;
   /** GET /api/profile (DATA-4); null until the first load. */ profile: Profile | null;
-  /** DEMO_MODE on the server (APP-5); always true for the local simulation. */ demoMode: boolean }
+  /** DEMO_MODE on the server (APP-5); always true for the local simulation. */ demoMode: boolean;
+  /** D-33: R2 actions run without asking. Resets when the server restarts. */ autoApprove: boolean }
 export interface OttoDataSource {
   getSnapshot(): DemoState;
   subscribe(listener: () => void): () => void;
@@ -30,6 +32,7 @@ export interface OttoDataSource {
   /** Re-read what changes on its own: extensions and device, plus Home. */
   refresh(): Promise<void>;
   setProfileName(name: string): Promise<void>;
+  setAutoApprove(on: boolean): Promise<void>;
   approve(id: string): Promise<void>; deny(id: string): Promise<void>;
   connect(toolkitId: string): Promise<void>; disconnect(toolkitId: string): Promise<void>;
   doAction(id: string): Promise<string>; dismissAction(id: string): Promise<void>;

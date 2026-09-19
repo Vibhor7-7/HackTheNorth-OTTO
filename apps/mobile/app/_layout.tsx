@@ -10,6 +10,7 @@ import { isLive, otto } from "../src/data/source";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { LaunchScreen } from "../src/LaunchScreen";
 import { ApprovalNotice } from "../src/approval-notice";
+import { OverrideBanner } from "../src/ui";
 
 export default function RootLayout() {
   const [ready, setReady] = useState(false);
@@ -56,6 +57,7 @@ export default function RootLayout() {
             />
           ) : (
             <>
+              <OverrideBanner />
               <Stack
                 screenOptions={{
                   headerShown: false,

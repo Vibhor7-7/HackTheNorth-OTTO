@@ -100,6 +100,12 @@ export interface Profile {
   handles?: { github?: string };
 }
 
+/** GET/PUT /api/settings (D-33). auto_approve is in memory only; it resets on restart. */
+export interface Settings {
+  auto_approve: boolean;
+  demo_mode: boolean;
+}
+
 export type DeviceState = "idle" | "listening" | "thinking" | "speaking" | "error";
 
 export interface DeviceStatus {

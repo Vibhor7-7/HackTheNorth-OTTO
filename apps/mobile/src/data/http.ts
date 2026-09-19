@@ -8,7 +8,7 @@
 import type {
   ActionItem, Approval, ChatMessage, ChatSession, ConnectionRequest, DemoScenario,
   DemoState, Device, Extension, HomePayload, Memory, NetworkState, OttoDataSource,
-  OttoEvent, Profile, Task, TaskStep, Turn,
+  OttoEvent, Profile, Settings, Task, TaskStep, Turn,
 } from './types';
 
 /**
@@ -60,7 +60,7 @@ function emptyState(): DemoState {
     chatSessions: [{ id: SINGLE_THREAD_ID, title: 'Otto', messages: [], created_at: new Date().toISOString(), updated_at: new Date().toISOString() }],
     activeChatId: SINGLE_THREAD_ID,
     network: 'offline', streaming: false, hydrated: false,
-    profile: null, demoMode: false,
+    profile: null, demoMode: false, autoApprove: false,
   };
 }
 
@@ -142,7 +142,7 @@ export class HttpOtto implements OttoDataSource {
 
   async initialize(): Promise<void> {
     try {
-      const [home, turns, memories, extensions, messages, device, profile, health] = await Promise.all([
+      const [home, turns, memories, extensions, messages, device, profile, health, settings] = await Promise.all([
         this.request<HomePayload>('/api/home'),
         this.request<Turn[]>('/api/turns?limit=50'),
         this.request<Memory[]>('/api/memories'),
@@ -152,6 +152,7 @@ export class HttpOtto implements OttoDataSource {
         this.request<Profile>('/api/profile'),
         // Unauthenticated on purpose; it is also the "is this even Otto" probe.
         this.request<{ demo_mode?: boolean }>('/health').catch(() => ({} as { demo_mode?: boolean })),
+        this.request<Settings>('/api/settings'),
       ]);
 
       const steps = await this.loadSteps(home.recent_tasks);
@@ -159,7 +160,8 @@ export class HttpOtto implements OttoDataSource {
       this.publish({
         device,
         profile,
-        demoMode: Boolean(health.demo_mode),
+        demoMode: Boolean(health.demo_mode ?? settings.demo_mode),
+        autoApprove: settings.auto_approve,
         tasks: home.recent_tasks,
         approvals: home.approvals,
         connections: home.connections,
@@ -297,6 +299,9 @@ export class HttpOtto implements OttoDataSource {
       case 'device.updated':
         this.publish({ device: event.data });
         break;
+      case 'settings.updated':
+        this.publish({ autoApprove: event.data.auto_approve, demoMode: event.data.demo_mode });
+        break;
     }
     this.emit(event);
   }
@@ -427,6 +432,12 @@ export class HttpOtto implements OttoDataSource {
       extensions, device,
       network: 'online',
     });
+  };
+
+  /** PUT /api/settings (D-33). The server confirms over settings.updated as well. */
+  setAutoApprove = async (on: boolean) => {
+    const settings = await this.request<Settings>('/api/settings', { method: 'PUT', body: JSON.stringify({ auto_approve: on }) });
+    this.publish({ autoApprove: settings.auto_approve });
   };
 
   /** PUT /api/profile (DATA-4). The name reaches the next Realtime session's instructions (VG-10). */

@@ -9,11 +9,12 @@
 //                       -> hold for approval (AP-3), resume once approved (AP-4)
 
 import type { RiskTier } from "@otto/shared";
-import { addStep, argsHash, createApproval, createConnectionRequest, updateTask } from "../store";
+import { addStep, argsHash, createApproval, createConnectionRequest, decideApproval, updateTask } from "../store";
 import { classify, toolkitOf } from "./tiers";
-import { waitForDecision } from "./pending";
+import { waitForDecision, type Decision } from "./pending";
 import { executeTool, isToolkitConnected } from "../composio/execute";
 import { createConnectLink } from "../composio/connect";
+import { isAutoApprove } from "./override";
 import { speak } from "../agent/notify";
 import { logger } from "../log";
 
@@ -71,20 +72,37 @@ export async function gate(req: GateRequest): Promise<GateResult> {
       args_hash: hash,
       channel: "app",
     });
-    addStep({
-      task_id: req.task_id,
-      kind: "approval_wait",
-      toolkit,
-      tool_slug: req.slug,
-      risk,
-      summary: `Waiting for you to approve: ${approval.summary}`,
-    });
-    updateTask(req.task_id, { status: "awaiting_approval" });
-    // D-24: the app is the only confirmation surface, so say so.
-    speak({ text: "I've put that in the app to confirm.", reason: "needs_approval", task_id: req.task_id });
-    log.info("held for approval", { task_id: req.task_id, slug: req.slug, approval: approval.id });
+    // D-33: with the override on, the record exists but nobody is asked. The
+    // step says so in the same words the app shows, so the log never implies a
+    // human approved this.
+    const decision: Decision = isAutoApprove() ? "approved" : await (async () => {
+      addStep({
+        task_id: req.task_id,
+        kind: "approval_wait",
+        toolkit,
+        tool_slug: req.slug,
+        risk,
+        summary: `Waiting for you to approve: ${approval.summary}`,
+      });
+      updateTask(req.task_id, { status: "awaiting_approval" });
+      // D-24: the app is the only confirmation surface, so say so.
+      speak({ text: "I've put that in the app to confirm.", reason: "needs_approval", task_id: req.task_id });
+      log.info("held for approval", { task_id: req.task_id, slug: req.slug, approval: approval.id });
+      return waitForDecision(approval.id, req.task_id);
+    })();
 
-    const decision = await waitForDecision(approval.id, req.task_id);
+    if (isAutoApprove() && decision === "approved") {
+      decideApproval(approval.id, "approved", "app");
+      addStep({
+        task_id: req.task_id,
+        kind: "approval_wait",
+        toolkit,
+        tool_slug: req.slug,
+        risk,
+        summary: `Auto-approved because the override is on: ${approval.summary}`,
+      });
+      log.warn("AUTO-APPROVED by override (D-33)", { task_id: req.task_id, slug: req.slug, approval: approval.id });
+    }
 
     if (decision !== "approved") {
       addStep({

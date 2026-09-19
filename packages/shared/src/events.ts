@@ -1,7 +1,7 @@
 // SSE events on GET /api/events (Section 7.2). Payload is the full object.
 import type {
   Task, TaskStep, Approval, ConnectionRequest, ActionItem, Memory,
-  DeviceStatus, Extension, ChatCitation, Turn,
+  DeviceStatus, Extension, ChatCitation, Turn, Settings,
 } from "./types";
 
 export type ServerEvent =
@@ -23,7 +23,8 @@ export type ServerEvent =
   | { type: "action_item.updated"; data: ActionItem }
   | { type: "memory.created";      data: Memory }
   | { type: "device.updated";      data: DeviceStatus }
-  | { type: "extension.updated";   data: Extension };
+  | { type: "extension.updated";   data: Extension }
+  | { type: "settings.updated";    data: Settings };
 
 export type ServerEventType = ServerEvent["type"];
 

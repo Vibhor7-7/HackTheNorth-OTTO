@@ -225,6 +225,21 @@ export function NetworkBanner() {
     </View>
   );
 }
+/** D-33: while the override is on, every screen says so. It cannot be dismissed. */
+export function OverrideBanner() {
+  const { autoApprove } = useOtto();
+  return !autoApprove ? null : (
+    <View
+      accessibilityRole="alert"
+      style={{ padding: 12, backgroundColor: c.danger }}
+    >
+      <Copy style={{ color: c.background, textAlign: "center", fontWeight: "600" }}>
+        Override on · actions run without your approval
+      </Copy>
+    </View>
+  );
+}
+
 export function ToolMark({
   id,
   size = 38,

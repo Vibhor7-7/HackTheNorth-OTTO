@@ -14,6 +14,7 @@ import { contextRoutes } from "./routes/context";
 import { extensionRoutes } from "./routes/extensions";
 import { chatRoutes } from "./routes/chat";
 import { connectCallbackRoutes } from "./routes/connectCallback";
+import { settingsRoutes } from "./routes/settings";
 
 export function buildApp() {
   // Fastify's own logger is off: NF-4 wants one structured line per event from
@@ -38,6 +39,7 @@ export function buildApp() {
   extensionRoutes(app);
   chatRoutes(app);
   connectCallbackRoutes(app);
+  settingsRoutes(app);
 
   app.get("/api/events", (req, reply) => openEventStream(req, reply));
 

@@ -256,6 +256,7 @@ export class MockOtto implements OttoDataSource {
   };
   setNetwork = (network: NetworkState) => { this.publish({ network }); };
   refresh = async () => { /* the simulation has nothing to re-read */ };
+  setAutoApprove = async (on: boolean) => { this.publish({ autoApprove: on }); };
   setProfileName = async (name: string) => {
     const trimmed = name.trim();
     if (!trimmed) throw new Error('Enter the name you want Otto to use.');
