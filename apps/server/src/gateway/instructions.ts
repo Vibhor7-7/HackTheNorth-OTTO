@@ -28,9 +28,8 @@ export function buildInstructions(profile: Profile, userMemories: string[], rece
   // VG-17: exactly these two sentences, and only while the lane exists (CMP-9).
   if (fastLaneAvailable()) {
     lines.push(
-      "For questions about the user's calendar or their GitHub issues and notifications,",
-      "call the matching tool and answer directly in one or two sentences.",
-      "For anything that changes the world, call run_task.",
+      "For questions about the user's calendar, call the calendar tool and answer directly.",
+      "For anything else at all, including anything about GitHub, call run_task.",
     );
   }
 

@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | Event | Hack the North 2026 |
-| Spec version | 1.5.0 (supersedes 1.4.0) |
+| Spec version | 1.6.0 (supersedes 1.5.0) |
 | Product name | **Otto.** The device, the agent, and the app are all Otto. Use the name in the system prompt, the app, and the pitch. |
 | Status | **Final for build.** Open decisions in Section 13 only. |
 | Tracks | OpenAI API Prizes, Composio, Expo (primary). Rox (natural fit, no extra work). Shopify: cut (D-25). Elastic: cut (D-12). |
@@ -247,7 +247,7 @@ Owner: Vibhor.
 | VG-14 | P0 | Accept legacy text-frame aliases from the device and treat them as the JSON equivalents: `START` = `ptt_start`, `STOP` = `ptt_end`, `CANCEL` = `ptt_cancel`, `PING` = `ping`. When the device sent legacy frames, reply with legacy frames: `AUDIO_START:24000` = `speak_start`, `AUDIO_END` = `speak_end`, `THINKING` = `state:thinking`, `TRANSCRIPT:<text>` and `ANSWER:<text>` for transcripts. Detect mode from the first text frame. |
 | VG-15 | P0 | Per-turn log line: `turn_id`, `ptt_end_at`, `first_audio_byte_at`, `latency_ms`, `user_text`, `assistant_text`, `tool_calls[]`. This is NF-1 and it is how the demo gets debugged. |
 | VG-16 | P0 | **Fast lane.** The two calendar tools in 7.4 are registered on the Realtime session as function tools. On `response.function_call_arguments.done` for one of them, the gateway calls `approvals/gate.ts` (R0, passes immediately, step logged) then Composio, with a **2.5 s hard timeout**. On success: send `function_call_output` with the result and `response.create`; the model answers in the same turn. On timeout or error: send `function_call_output` of `{"status":"deferred"}` and `response.create` (the model says it will follow up), and spawn the same call as a Task through `run_task` so VG-7 speaks the answer when it lands. Log `fast_lane: true` and the duration on the step. |
-| VG-17 | P1 | Fast-lane session instruction: "For questions about the user's calendar or their GitHub issues and notifications, call the matching tool and answer directly. For anything that changes the world, call run_task." Keep it to those two sentences. |
+| VG-17 | P1 | Fast-lane session instruction: "For questions about the user's calendar, call the calendar tool and answer directly. For anything else at all, including anything about GitHub, call run_task." Keep it to those two sentences. |
 
 Verify event names against current Realtime docs before coding. Names changed between beta and GA.
 
@@ -275,14 +275,14 @@ Replaces the former MCP-1 to MCP-5 (D-10). Composio provides three things and we
 | ID | Pri | Requirement |
 |---|---|---|
 | CMP-1 | P0 | **Discovery.** `composio/discover.ts`: given a task goal, select **toolkits** from those the user has set up, then load a curated tool subset for each selected toolkit and return them in OpenAI function-calling shape via Composio's OpenAI provider. Write a `plan` step naming the toolkits chosen and the top three not chosen. Tool-level `search` is a best-effort hint that may widen the candidate set; it must never be the only path, and a bare `limit` must never be passed (D-26). |
-| CMP-2 | P0 | **Managed auth.** No per-integration tokens in env. Connected accounts live in Composio, scoped to `COMPOSIO_USER_ID`. Pre-connect **Google Calendar and GitHub** before the demo (GitHub is on the fast lane, which has no time to raise a Connect Link). Create the **Gmail** auth config but leave it **unconnected** - that absence is S0 (D-16). Creating a Connect Link needs an API key with `connected_accounts` **write** access, and uses `connectedAccounts.link(userId, authConfigId, { callbackUrl })` - `.initiate` returns 400 for Composio-managed OAuth configs, which is what every dashboard-created toolkit is. |
+| CMP-2 | P0 | **Managed auth.** No per-integration tokens in env. Connected accounts live in Composio, scoped to `COMPOSIO_USER_ID`. Pre-connect **Google Calendar and GitHub** before the demo. Create the **Gmail** auth config but leave it **unconnected** - that absence is S0 (D-16). Creating a Connect Link needs an API key with `connected_accounts` **write** access, and uses `connectedAccounts.link(userId, authConfigId, { callbackUrl })` - `.initiate` returns 400 for Composio-managed OAuth configs, which is what every dashboard-created toolkit is. |
 | CMP-3 | P0 | **Execution.** `composio/execute.ts` exposes `executeTool(slug, args)` which calls Composio execution for the user, with 30 s timeout, one retry, and structured errors. **Only `approvals/gate.ts` imports this file.** |
 | CMP-4 | P0 | **Connect Link flow.** When execution returns a needs-authentication result, do not fail the task. Create a ConnectionRequest (7.3), set task status `awaiting_connection`, and surface the Connect Link in the app's "Needs you" card (APP-1, APP-7). When the user completes it, retry the exact same tool call once, then continue. This is demo scenario S0. |
 | CMP-5 | P0 | **Risk tiering of Composio tools.** Tier is derived from the tool slug by rule (7.6), with an argument-level override that can raise but never lower. Unknown tools default to R2. Replaces MCP-5. |
 | CMP-6 | P1 | Extensions screen data: list Composio toolkits with connection status for the user (connected / needs_auth / suggested) so APP-4 has real data. |
 | CMP-7 | P1 | Cache discovery results per goal string for the session so repeated demo runs do not pay the search cost twice. |
 | CMP-8 | P0 | Verify exact SDK method names for search, connect-link creation, and execution against docs.composio.dev before coding CMP-1, CMP-3, CMP-4. Tool Router is beta; pin the package version and do not rely on undocumented behaviour. |
-| CMP-9 | P0 | **Fast-lane allowlist.** `composio/fastlane.ts` exports exactly four read-only Composio tools for the voice agent (D-27): Google Calendar free/busy, Google Calendar list events for a date, GitHub issues assigned to the user, and GitHub unread notifications. All four are R0 by rule, with no override needed. Each carries `defaultArgs` so the model never supplies pagination, and a `shape` that projects the result down to what a spoken answer needs. Nothing else is added to this file without a Decision. Measure each against Composio on the demo network; if p95 is over 2 s, remove it from the allowlist and the voice agent falls back to `run_task` for calendar questions with no other change. |
+| CMP-9 | P0 | **Fast-lane allowlist.** `composio/fastlane.ts` exports exactly two Composio tools for the voice agent: Google Calendar free/busy and Google Calendar list events for a date. Both are R0. Each carries `defaultArgs` so the model never supplies pagination, and a `shape` that projects the result down to what a spoken answer needs. Nothing else is added to this file without a Decision (D-28 removed GitHub from it). Measure each against Composio on the demo network; if p95 is over 2 s, remove it from the allowlist and the voice agent falls back to `run_task` for calendar questions with no other change. |
 
 **Why not let Composio's Tool Router meta-tool run the whole loop.** Tool Router's native meta-tool bundles search, auth, and execute into one call. That is elegant and it would bypass AP-1. We use Composio for the three capabilities separately so the approval gate sits between LLM choice and execution. If the SDK does not expose them separately, use Composio's before-execute modifier as the gate point instead. Either way AG-3 holds.
 
@@ -598,16 +598,12 @@ Fast-lane tools (VG-16, CMP-9; executed by the gateway through the gate, 2.5 s t
 ```jsonc
 calendar_free_busy   { start: string, end: string }        -> { busy: [{start, end}] } | { status: "deferred" }
 calendar_list_events { date: string }                      -> { events: [{title, start, end, attendees}] } | { status: "deferred" }
-github_my_issues     { state?: "open" | "closed" }         -> { count, issues: [{title, repo, number}] } | { status: "deferred" }
-github_notifications { unread_only?: string }              -> { count, notifications: [{title, repo, reason}] } | { status: "deferred" }
 ```
 
-**Eight tools total** (D-27). The voice model answers read-only calendar and GitHub
-questions itself and delegates everything else. **It never writes.** Every fast-lane
-tool has no required arguments beyond a date range, because the model cannot be
-expected to know a repository name and asking for one would break the single-call
-rule. Results are projected down to the fields a spoken answer needs before they go
-back to the model, so it never has 50 KB of JSON in front of it.
+**Six tools total** (D-28). The voice model answers calendar questions itself and
+delegates everything else, including all of GitHub. **It never writes.** Fast-lane
+results are projected down to the fields a spoken answer needs before they go back
+to the model, so it never has 50 KB of JSON in front of it.
 
 ### 7.5 Realtime session configuration
 
@@ -675,7 +671,15 @@ R1  slug matches /(CREATE|UPDATE|ADD|SET|DRAFT|EDIT|INSERT)/
 R2  otherwise (unknown defaults to highest tier)
 ```
 
-Overrides live in `approvals/tiers.ts` as an explicit map for the demo toolkits, e.g. `GOOGLECALENDAR_CREATE_EVENT: R1`, `SHOPIFY_UPDATE_PRODUCT: R2`.
+Overrides live in `approvals/tiers.ts` as an explicit map for the demo toolkits,
+e.g. `GOOGLECALENDAR_CREATE_EVENT: R1`, `GMAIL_SEND_EMAIL: R2`.
+
+Two GitHub calls are pinned deliberately (D-28). `GITHUB_CREATE_AN_ISSUE_COMMENT`
+is **R2**: a comment is posted publicly in the user's name and cannot be un-said,
+which is both "sends on the user's behalf" and "public change" in the rules above.
+`GITHUB_MERGE_A_PULL_REQUEST` is **R2** as well - `MERGE` matches none of the slug
+patterns, so it would otherwise reach R2 only through the unknown-tool default, and
+a pin means it cannot drift to R1 if those patterns change.
 
 ---
 
@@ -699,7 +703,7 @@ Not a separate scenario. It is the first 20 seconds of S1, and it only works if 
 
 ### S1. Coffee chat scheduling (Google Calendar) - build first
 
-Optional warm-up (5 s, fast lane): "Am I free Thursday afternoon?" or "What's assigned to me on GitHub?" Otto answers in the same turn. Then:
+Optional warm-up (5 s, fast lane): "Am I free Thursday afternoon?" Otto answers in the same turn from the calendar. Then:
 
 > "Find 30 minutes with Sam next week for a coffee chat and send an invite."
 
@@ -863,6 +867,7 @@ See D-12. The honest reason: it would not make the hack easier and it would not 
 | **D-25** | **Shopify is cut. S2 becomes "send a WhatsApp message on the user's behalf".** | Shopify needed a dev store, a product catalogue and a storefront to refresh, all to demonstrate an R2 approval that WhatsApp demonstrates with no extra setup. WhatsApp is already the toolkit S0 connects live, so S0 and S2 now reinforce one interaction instead of spreading across three vendors. The Shopify track is dropped; it was listed as "no extra work", which stopped being true. |
 | **D-26** | **Discovery picks among the toolkits the user has set up, and loads a curated tool subset per toolkit. Composio's tool search is a best-effort hint only.** | Measured against the live catalogue: `tools.getRawComposioTools({search})` is AND-keyword matching over tool text, not semantic - "free busy calendar" returns exactly the right tools, "free slot week" returns nothing because "week" matches no tool, and a full goal sentence always returns zero. When a search resolves to one toolkit the SDK sends `scopes: null` and the API rejects it, so a search can throw as well as come back empty. `toolkits.get({search})` ignores `search` entirely - the same six toolkits come back for any term. A bare `limit` truncates a toolkit's tools alphabetically, so asking for five Google Calendar tools yields five `*_ACL_*` tools. What is genuinely dynamic, and all AG-7 should claim, is which toolkit gets chosen and the fact that an unconnected one triggers a live Connect Link. |
 | **D-27** | **WhatsApp is cut. Gmail carries S0 and S2 on the agent path; GitHub joins the fast lane, read-only.** 7.4 goes from six tools to eight; CMP-9 from two to four. | WhatsApp is the Meta Business Cloud API: a business account, a registered number, a system-user token, registered test recipients, and a 24-hour window or an approved template before a plain text message will send. That is a lot of setup standing behind one demo beat, and none of it is visible to a judge. Gmail is one OAuth click on the account already in use, sends to anyone, and `GMAIL_SEND_EMAIL` is R2 by rule with no override - so S0's connect beat and S2's approval beat both work with less to go wrong. GitHub on the fast lane adds a second read-only question the voice agent can answer in one breath ("what's assigned to me?"), which shows the fast lane is a general capability rather than a calendar special case. Both GitHub tools take no required arguments, so the voice model cannot get them wrong. |
+| **D-28** | **GitHub moves off the fast lane onto the agent path, with thirteen tools instead of two.** 7.4 returns to six tools, CMP-9 to two. | The fast lane's constraints were what limited GitHub: single call, no required arguments, 2.5 s. That only ever allowed the two account-wide list calls, because everything interesting needs `owner` and `repo` - which the voice model cannot know. On the agent path the loop resolves a repo name first (`LIST_REPOSITORIES_FOR_THE_AUTHENTICATED_USER`) and then acts, so GitHub gains reading issues and pull requests in a named repo, searching, creating and updating issues, assigning people, commenting, and merging. Verified: "how many open issues are assigned to me, and what repos do I have" chained three read calls into one spoken answer, and "merge pull request 1" stopped at an approval card without merging. The cost is that a GitHub question now takes a "on it" plus a follow-up instead of one breath; the calendar keeps the fast lane because that is the question people ask mid-sentence. |
 
 ---
 
@@ -907,7 +912,7 @@ Judge check-ins: OpenAI, Composio and Expo booths early, and once more after sta
 | TLS on ESP32 eats memory | Medium | Test `wss://` early; tiny JSON; no base64 on device |
 | Composio SDK shape differs from memory | High | CMP-8: read docs before coding; pin version; ask at booth |
 | Composio has no food-delivery toolkit | High | Resolve OD-5 before any S3 code; mock fallback labelled honestly |
-| A fast-lane toolkit is not connected, so every voice question defers | Medium | The lane cannot raise a Connect Link inside a turn, so CMP-2 pre-connects Google Calendar and GitHub. A missing connection degrades to `run_task` rather than failing (VG-16), but the one-breath answer is lost |
+| A fast-lane toolkit is not connected, so every voice question defers | Medium | The lane cannot raise a Connect Link inside a turn, so CMP-2 pre-connects Google Calendar. A missing connection degrades to `run_task` rather than failing (VG-16), but the one-breath answer is lost |
 | Composio API key lacks `connected_accounts` write | High | CMP-4 and all of S0 need it. Verified as part of stage 2, not discovered on stage |
 | Connect Link redirect does not return to the app cleanly | Medium | The link can complete in Safari; the app polls `/api/connections` and the server resumes on Composio's callback regardless of where the browser lands |
 | The app is the only confirmation surface, so a phone or SSE failure blocks every R2 action | Medium | `GET /api/home` re-fetches the pending list on foreground, so a dropped SSE connection self-heals; approvals also expire rather than hanging (AP-4) |
@@ -958,6 +963,13 @@ Judge check-ins: OpenAI, Composio and Expo booths early, and once more after sta
 
 ## 17. Changelog
 
+- **1.6.0**: GitHub moves from the fast lane to the agent path and grows from two
+  tools to thirteen (D-28). **Section 7 changed:** 7.4 returns to six function
+  tools and CMP-9 to two, both GitHub entries removed; VG-17's instruction now
+  sends everything about GitHub through `run_task`. 7.6 gains an explicit note for
+  the two pinned GitHub tiers: `GITHUB_CREATE_AN_ISSUE_COMMENT` and
+  `GITHUB_MERGE_A_PULL_REQUEST` are both R2. The S1 warm-up line goes back to
+  being a calendar question.
 - **1.5.0**: WhatsApp cut; Gmail carries S0 and S2, GitHub joins the fast lane
   read-only (D-27). **Section 7 changed:** 7.4 now lists eight function tools,
   adding `github_my_issues` and `github_notifications`, and records that fast-lane

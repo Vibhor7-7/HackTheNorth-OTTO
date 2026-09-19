@@ -8,7 +8,7 @@
 import { WebSocket } from "ws";
 import { env } from "../env";
 import { logger } from "../log";
-import { CONTROL_TOOLS, ALL_FAST_LANE_TOOLS, type RealtimeFunctionTool } from "@otto/shared";
+import { CONTROL_TOOLS, FAST_LANE_TOOLS, type RealtimeFunctionTool } from "@otto/shared";
 import { fastLaneAvailable } from "../composio/fastlane";
 
 const log = logger("realtime");
@@ -91,9 +91,9 @@ export class RealtimeSession {
     log.info("session open", { model: env.realtimeModel, tools: this.tools().length });
   }
 
-  /** VG-6 / VG-16. Eight tools, or four while the fast lane is cut (CMP-9, D-27). */
+  /** VG-6 / VG-16. Six tools total, or four while the fast lane is cut (CMP-9). */
   private tools(): RealtimeFunctionTool[] {
-    return fastLaneAvailable() ? [...CONTROL_TOOLS, ...ALL_FAST_LANE_TOOLS] : [...CONTROL_TOOLS];
+    return fastLaneAvailable() ? [...CONTROL_TOOLS, ...FAST_LANE_TOOLS] : [...CONTROL_TOOLS];
   }
 
   get isOpen(): boolean {

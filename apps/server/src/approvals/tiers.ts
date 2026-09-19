@@ -12,7 +12,19 @@ export const TIER_OVERRIDES: Record<string, RiskTier> = {
   GOOGLECALENDAR_FIND_FREE_SLOTS: "R0",
   GOOGLECALENDAR_EVENTS_LIST: "R0",
   GMAIL_SEND_EMAIL: "R2",
-  SHOPIFY_UPDATE_PRODUCT: "R2",
+
+  // GitHub (D-28). Reads and private-ish writes are R1; anything that speaks in
+  // the user's name publicly, or moves the default branch, holds for approval.
+  GITHUB_CREATE_AN_ISSUE: "R1",
+  GITHUB_UPDATE_AN_ISSUE: "R1",
+  GITHUB_ADD_ASSIGNEES_TO_AN_ISSUE: "R1",
+  // A comment is posted publicly as the user and cannot be un-said, which is
+  // "sends on the user's behalf" and "public change" in 7.6's terms.
+  GITHUB_CREATE_AN_ISSUE_COMMENT: "R2",
+  // MERGE matches none of the 7.6 slug patterns, so it would land on R2 only via
+  // the unknown-tool default. Pinned explicitly so it cannot drift to R1 if the
+  // patterns ever change.
+  GITHUB_MERGE_A_PULL_REQUEST: "R2",
 };
 
 const R2_SLUG = /(SEND|DELETE|REMOVE|PUBLISH|PAY|ORDER|CHECKOUT|POST_|TWEET|PURCHASE|TRANSFER)/;

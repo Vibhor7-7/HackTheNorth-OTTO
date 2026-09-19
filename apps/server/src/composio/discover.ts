@@ -94,12 +94,15 @@ async function availableToolkits(): Promise<{ slug: string; name: string; connec
       composio().authConfigs.list({} as never),
       activeToolkitSlugs(),
     ]);
-    const out = items<{ toolkit?: { slug?: string } | string; name?: string }>(configs)
-      .map((c) => {
-        const slug = slugOf(c.toolkit) || (c.name ?? "").toLowerCase();
-        return { slug, name: slug, connected: connected.has(slug) };
-      })
-      .filter((t) => t.slug);
+    // One entry per toolkit: a toolkit can carry several auth configs, and
+    // listing it twice would double it in the AG-7 plan step.
+    const bySlug = new Map<string, { slug: string; name: string; connected: boolean }>();
+    for (const c of items<{ toolkit?: { slug?: string } | string; name?: string }>(configs)) {
+      const slug = slugOf(c.toolkit) || (c.name ?? "").toLowerCase();
+      if (!slug || bySlug.has(slug)) continue;
+      bySlug.set(slug, { slug, name: slug, connected: connected.has(slug) });
+    }
+    const out = [...bySlug.values()];
     return out.length ? out : fallback();
   } catch (err) {
     log.warn("toolkit availability lookup failed", {

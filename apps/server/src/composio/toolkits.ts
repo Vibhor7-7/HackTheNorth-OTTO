@@ -29,11 +29,27 @@ export const CURATED_TOOLS: Record<string, string[]> = {
     "GMAIL_SEARCH_PEOPLE",       // resolves a name to an address (AG-9)
     "GMAIL_GET_PROFILE",
   ],
+  // GitHub on the agent path (D-28), where multi-step work is possible. Most
+  // GitHub tools need owner/repo, which is exactly why they cannot live on the
+  // fast lane: the agent has to resolve "the Otto repo" to a full name first, and
+  // LIST_REPOSITORIES is what lets it.
   github: [
+    // orientation - who am I, and what repos exist
+    "GITHUB_GET_THE_AUTHENTICATED_USER",
+    "GITHUB_LIST_REPOSITORIES_FOR_THE_AUTHENTICATED_USER",
+    // reading
     "GITHUB_LIST_ISSUES_ASSIGNED_TO_THE_AUTHENTICATED_USER",
     "GITHUB_LIST_NOTIFICATIONS_FOR_THE_AUTHENTICATED_USER",
-    "GITHUB_GET_PULL_REQUESTS",
-    "GITHUB_CREATE_AN_ISSUE",    // R1
+    "GITHUB_LIST_REPOSITORY_ISSUES",
+    "GITHUB_GET_AN_ISSUE",
+    "GITHUB_LIST_PULL_REQUESTS",
+    "GITHUB_SEARCH_ISSUES_AND_PULL_REQUESTS",
+    // writing
+    "GITHUB_CREATE_AN_ISSUE",            // R1
+    "GITHUB_UPDATE_AN_ISSUE",            // R1 - also how an issue gets closed
+    "GITHUB_ADD_ASSIGNEES_TO_AN_ISSUE",  // R1
+    "GITHUB_CREATE_AN_ISSUE_COMMENT",    // R2 - a public utterance in your name
+    "GITHUB_MERGE_A_PULL_REQUEST",       // R2 - changes the default branch
   ],
 };
 
