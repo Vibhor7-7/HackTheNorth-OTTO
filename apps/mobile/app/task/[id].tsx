@@ -11,6 +11,7 @@ import {
   NetworkBanner,
   Section,
   ToolMark,
+  Loading,
   s,
   useOtto,
 } from "../../src/ui";
@@ -138,6 +139,8 @@ export default function TaskDetail() {
   const approval = state.approvals.find(
     (a) => a.task_id === id && a.status === "pending",
   );
+  // The task may simply not have arrived yet (see Loading in ui.tsx).
+  const pendingFirstLoad = !task && !state.hydrated;
   const connection = state.connections.find(
     (a) => a.task_id === id && a.status === "pending",
   );
@@ -152,7 +155,9 @@ export default function TaskDetail() {
         <Header title="Task" back={back} />
       </View>
       <NetworkBanner />
-      {!task ? (
+      {pendingFirstLoad ? (
+        <Loading title="Loading task" />
+      ) : !task ? (
         <View style={s.content}>
           <Copy style={{ fontSize: 22, fontWeight: "600" }}>
             Task not found

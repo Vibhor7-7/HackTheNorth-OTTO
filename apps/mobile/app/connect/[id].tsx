@@ -13,6 +13,7 @@ import {
   Button,
   ToolMark,
   useOtto,
+  Loading,
   s,
 } from "../../src/ui";
 import { otto } from "../../src/data/source";
@@ -34,8 +35,15 @@ export default function ConnectScreen() {
     matchingRequests.find((r) => r.status === "pending") ??
     matchingRequests.at(-1);
   const task = state.tasks.find((t) => t.id === request?.task_id);
+  const loadingFirst = !ext && !state.hydrated;
   const close = () =>
     router.canGoBack() ? router.back() : router.replace("/(tabs)/connections");
+  if (loadingFirst)
+    return (
+      <SafeAreaView edges={["bottom"]} style={s.page}>
+        <Loading title="Loading app" />
+      </SafeAreaView>
+    );
   return (
     <SafeAreaView edges={["bottom"]} style={s.page}>
       <ScrollView contentContainerStyle={[s.content, { paddingBottom: 32 }]}>

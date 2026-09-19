@@ -194,6 +194,24 @@ export function Section({ title, aside }: { title: string; aside?: string }) {
     </View>
   );
 }
+/**
+ * Shown by a detail screen while the first load is still in flight.
+ *
+ * These screens look an entity up by id out of the snapshot. The mock built its
+ * fixtures synchronously, so an id was always resolvable on the very first render;
+ * the real provider starts empty and fills over the network. Without this, a screen
+ * restored by the router on launch renders before its data exists and declares the
+ * thing missing when it is merely late.
+ */
+export function Loading({ title = "Loading" }: { title?: string }) {
+  return (
+    <View style={[s.content, { alignItems: "center", justifyContent: "center", flex: 1 }]}>
+      <ActivityIndicator color={c.accent} />
+      <Copy style={{ color: c.muted, marginTop: 14 }}>{title}</Copy>
+    </View>
+  );
+}
+
 export function NetworkBanner() {
   const { network } = useOtto();
   return network === "online" ? null : (

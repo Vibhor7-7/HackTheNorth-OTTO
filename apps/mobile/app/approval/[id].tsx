@@ -12,6 +12,7 @@ import {
   IconButton,
   Button,
   useOtto,
+  Loading,
   s,
 } from "../../src/ui";
 import { TaskJourney } from "../../src/task-journey";
@@ -29,6 +30,14 @@ export default function ApprovalScreen() {
   }, []);
   const close = () =>
     router.canGoBack() ? router.back() : router.replace("/(tabs)/home");
+  // Still loading: the approval may exist and simply not have arrived yet. Saying
+  // "Unavailable" here made every launch on a restored route a dead end.
+  if (!approval && !state.hydrated)
+    return (
+      <SafeAreaView style={s.page}>
+        <Loading title="Loading request" />
+      </SafeAreaView>
+    );
   if (!approval)
     return (
       <SafeAreaView style={s.page}>
