@@ -1,13 +1,20 @@
 // SSE events on GET /api/events (Section 7.2). Payload is the full object.
 import type {
   Task, TaskStep, Approval, ConnectionRequest, ActionItem, Memory,
-  DeviceStatus, Extension, ChatCitation,
+  DeviceStatus, Extension, ChatCitation, Turn,
 } from "./types";
 
 export type ServerEvent =
   | { type: "task.created";        data: Task }
   | { type: "task.updated";        data: Task }
   | { type: "step.created";        data: TaskStep }
+  /**
+   * A voice turn was transcribed. `updated` matters as much as `created`: input
+   * transcription can land after the response is done, so a turn is often
+   * persisted with one side blank and filled in a moment later.
+   */
+  | { type: "turn.created";        data: Turn }
+  | { type: "turn.updated";        data: Turn }
   | { type: "approval.created";    data: Approval }
   | { type: "approval.updated";    data: Approval }
   | { type: "connection.created";  data: ConnectionRequest }

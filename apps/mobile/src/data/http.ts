@@ -265,6 +265,11 @@ export class HttpOtto implements OttoDataSource {
       case 'step.created':
         this.publish({ steps: upsert(this.state.steps, event.data) });
         break;
+      case 'turn.created':
+      case 'turn.updated':
+        // Newest first, matching GET /api/turns and what the Transcript tab shows.
+        this.publish({ turns: upsert(this.state.turns, event.data) });
+        break;
       case 'approval.created':
       case 'approval.updated':
         this.publish({ approvals: upsert(this.state.approvals, event.data) });

@@ -1,6 +1,7 @@
 import type { Turn } from "@otto/shared";
 import { db, j, parseJson } from "./db";
 import { newId, nowIso } from "../ids";
+import { publish } from "../bus";
 
 type Row = Record<string, any>;
 
@@ -44,6 +45,7 @@ export function createTurn(input: {
     action_item_ids: j(turn.action_item_ids),
     latency_ms: turn.latency_ms ?? null,
   });
+  publish({ type: "turn.created", data: turn });
   return turn;
 }
 
@@ -73,6 +75,7 @@ export function updateTurn(
     latency_ms: next.latency_ms ?? null,
     ended_at: next.ended_at,
   });
+  publish({ type: "turn.updated", data: next });
   return next;
 }
 

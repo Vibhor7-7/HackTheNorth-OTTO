@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | Event | Hack the North 2026 |
-| Spec version | 1.9.0 (supersedes 1.8.0) |
+| Spec version | 1.10.0 (supersedes 1.9.0) |
 | Product name | **Otto.** The device, the agent, and the app are all Otto. Use the name in the system prompt, the app, and the pitch. |
 | Status | **Final for build.** Open decisions in Section 13 only. |
 | Tracks | OpenAI API Prizes, Composio, Expo (primary). Rox (natural fit, no extra work). Shopify: cut (D-25). Elastic: cut (D-12). |
@@ -319,7 +319,7 @@ Expo, iOS target, single user, `APP_API_KEY`. **Four tabs: Home, Context, Connec
 
 | ID | Pri | Requirement |
 |---|---|---|
-| APP-6 | P0 | **Transcript sub-tab.** Every Turn, word for word, exactly as Realtime transcribed it: user text and Otto's reply, reverse-chronological, grouped by day, with chips linking to any Task the turn started. This is the "everything Otto heard" view; do not summarise or clean it. Search by keyword is P1. |
+| APP-6 | P0 | **Transcript sub-tab.** Arrives live: `turn.created` when a turn is persisted and `turn.updated` when a late transcript fills it in. Every Turn, word for word, exactly as Realtime transcribed it: user text and Otto's reply, reverse-chronological, grouped by day, with chips linking to any Task the turn started. This is the "everything Otto heard" view; do not summarise or clean it. Search by keyword is P1. |
 | APP-11 | P0 | **Add context sub-tab.** Free-text notes the user gives Otto ("Sam Chen is my manager", "I prefer morning meetings", "my usual order is..."). List, add, delete. Stored as Memories with `source: "user"` (DATA-4) and injected into the task agent (AG-8), the context agent (CHAT-1), and the Realtime instructions on next session (VG-10). |
 
 **Connections tab**
@@ -502,7 +502,7 @@ GET    /api/events                           -> SSE
 GET    /connect/callback                     -> Composio redirect target; marks ConnectionRequest done, resumes task
 ```
 
-SSE events on `/api/events`: `task.created`, `task.updated`, `step.created`, `approval.created`, `approval.updated`, `connection.created`, `connection.updated`, `action_item.created`, `action_item.updated`, `memory.created`, `device.updated`, `extension.updated`. Payload is the full object.
+SSE events on `/api/events`: `task.created`, `task.updated`, `step.created`, `turn.created`, `turn.updated`, `approval.created`, `approval.updated`, `connection.created`, `connection.updated`, `action_item.created`, `action_item.updated`, `memory.created`, `device.updated`, `extension.updated`. Payload is the full object.
 
 ### 7.3 Data model
 
