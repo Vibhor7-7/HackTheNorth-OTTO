@@ -11,6 +11,8 @@ import * as Haptics from "expo-haptics";
 import { GlassChrome } from "./glass";
 import { Button, Copy, Display } from "./ui";
 import { demoDevices, useDemoDevices } from "./data/device-demo";
+import { useOtto } from "./ui";
+import { isLive } from "./data/source";
 import { colors as c } from "./theme";
 
 type Device = "headphones" | "otto";
@@ -58,14 +60,28 @@ function DeviceArtwork({
 export function DevicesTile() {
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<Device>("headphones");
-  const deviceState = useDemoDevices();
+  const local = useDemoDevices();
+  const otto = useOtto();
   useEffect(() => {
     void demoDevices.initialize();
   }, []);
+
+  // Otto is real hardware, so its state comes from the server (GET /api/device,
+  // then device.updated over SSE). Headphones are the phone's own Bluetooth and the
+  // server has no notion of them, so they stay local.
+  const deviceState = {
+    headphones: local.headphones,
+    otto: isLive
+      ? otto.device.connected
+        ? ("connected" as const)
+        : ("disconnected" as const)
+      : local.otto,
+  };
   const connected = {
     headphones: deviceState.headphones === "connected",
     otto: deviceState.otto === "connected",
   };
+  const battery = otto.device.battery;
   const reducedMotion = useReducedMotion();
   const count = Number(connected.headphones) + Number(connected.otto);
   const isConnected = connected[selected];
@@ -202,7 +218,13 @@ export function DevicesTile() {
                   <View style={styles.detailRow}>
                     <Copy>Battery</Copy>
                     <Copy style={styles.detailValue}>
-                      {isConnected ? "84%" : "—"}
+                      {!isConnected
+                        ? "—"
+                        : battery !== undefined
+                          ? `${Math.round(battery * 100)}%`
+                          : isLive
+                            ? "Not reported"
+                            : "84%"}
                     </Copy>
                   </View>
                 </>
@@ -217,13 +239,22 @@ export function DevicesTile() {
                     ? "Disconnect"
                     : "Reconnect"
               }
+              disabled={isLive && selected === "otto"}
               onPress={() => {
+                // Real hardware connects itself; there is nothing for the app to
+                // toggle, and a button that pretends otherwise is a lie on the
+                // screen judges look at most.
+                if (isLive && selected === "otto") return;
                 void demoDevices.toggle(selected);
                 void Haptics.selectionAsync().catch(() => {});
               }}
             />
             <Copy style={styles.demo}>
-              Demo devices · No Bluetooth connection
+              {isLive && selected === "otto"
+                ? otto.device.last_seen
+                  ? `Live · last seen ${new Date(otto.device.last_seen).toLocaleTimeString()}`
+                  : "Live · waiting for the device to connect"
+                : "Demo devices · No Bluetooth connection"}
             </Copy>
           </ScrollView>
         </SafeAreaView>

@@ -5,6 +5,7 @@ import type { FastifyInstance } from "fastify";
 import {
   completeConnectionRequest, getConnectionRequest, listConnectionRequests,
 } from "../../store";
+import { publishExtensionStatus } from "../../composio/extensions";
 import { logger } from "../../log";
 
 const log = logger("api.connections");
@@ -21,6 +22,7 @@ export function connectionRoutes(app: FastifyInstance): void {
 
     const done = completeConnectionRequest(req.params.id);
     log.info("connection completed from app", { task_id: existing.task_id, toolkit: existing.toolkit });
+    void publishExtensionStatus(existing.toolkit);
 
     // [TODO CMP-4] Retry the exact same tool call once, then continue the task.
     return done ?? existing;

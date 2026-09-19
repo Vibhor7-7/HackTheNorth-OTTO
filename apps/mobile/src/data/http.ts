@@ -56,6 +56,7 @@ function emptyState(): DemoState {
   return {
     tasks: [], steps: [], approvals: [], connections: [], actionItems: [],
     turns: [], memories: [], extensions: [], messages: [],
+    device: { connected: false, state: 'idle' },
     chatSessions: [{ id: SINGLE_THREAD_ID, title: 'Otto', messages: [], created_at: new Date().toISOString(), updated_at: new Date().toISOString() }],
     activeChatId: SINGLE_THREAD_ID,
     network: 'offline', streaming: false, hydrated: false,
@@ -70,7 +71,6 @@ export class HttpOtto implements OttoDataSource {
   private stream?: AbortController;
   private retry = 0;
   private closed = false;
-  private device: Device = { connected: false, state: 'idle' };
   /** Surfaced so a screen can show why it is offline instead of guessing. */
   lastError?: string;
   private poller?: ReturnType<typeof setInterval>;
@@ -83,8 +83,8 @@ export class HttpOtto implements OttoDataSource {
   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
   subscribeEvents = (listener: (event: OttoEvent) => void) => { this.events.add(listener); return () => { this.events.delete(listener); }; };
 
-  /** The device status is not in DemoState; screens that want it read it here. */
-  getDevice = () => this.device;
+  /** Also on the snapshot, so screens get it through useOtto() like everything else. */
+  getDevice = () => this.state.device;
 
   /** APP-15: one call paints Home. Also folded into local state so the rest of the app sees it. */
   getHome = async (): Promise<HomePayload> => {
@@ -150,10 +150,10 @@ export class HttpOtto implements OttoDataSource {
         this.request<Device>('/api/device'),
       ]);
 
-      this.device = device;
       const steps = await this.loadSteps(home.recent_tasks);
 
       this.publish({
+        device,
         tasks: home.recent_tasks,
         approvals: home.approvals,
         connections: home.connections,
@@ -289,8 +289,7 @@ export class HttpOtto implements OttoDataSource {
         this.publish({ extensions: upsert(this.state.extensions, event.data) });
         break;
       case 'device.updated':
-        this.device = event.data;
-        this.publish();
+        this.publish({ device: event.data });
         break;
     }
     this.emit(event);
@@ -308,8 +307,8 @@ export class HttpOtto implements OttoDataSource {
           this.request<HomePayload>('/api/home'),
           this.request<Device>('/api/device'),
         ]);
-        this.device = device;
         this.publish({
+          device,
           approvals: home.approvals,
           connections: home.connections,
           actionItems: home.action_items,

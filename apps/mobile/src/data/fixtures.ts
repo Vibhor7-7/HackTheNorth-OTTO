@@ -5,6 +5,9 @@ export function createFixtures(scenario: DemoScenario = 'default', now = Date.no
   const task = (id: string, goal: string, status: Task['status'], toolkits_used: string[], minutes: number): Task => ({ id, goal, status, source: 'voice', toolkits_used, created_at: at(minutes), updated_at: at() });
   const step = (task_id: string, seq: number, kind: TaskStep['kind'], summary: string, extra: Partial<TaskStep> = {}): TaskStep => ({ id: `${task_id}-step-${seq}`, task_id, seq, kind, summary, created_at: at(4 - seq / 2), ...extra });
   const state: DemoState = {
+    // The simulation has no hardware, so it reports a plausible device: the screen
+    // then has the same shape whichever provider is in use.
+    device: { connected: true, state: 'idle', last_seen: at(0) },
     hydrated: false, network: 'online', streaming: false, messages: [], activeChatId: 'chat-initial', chatSessions: [{ id: 'chat-initial', title: 'New chat', messages: [], created_at: new Date().toISOString(), updated_at: new Date().toISOString() }],
     tasks: [
       task('task-shopify', 'Put the blue hoodie on sale for 20% off', 'awaiting_approval', ['shopify'], 3),

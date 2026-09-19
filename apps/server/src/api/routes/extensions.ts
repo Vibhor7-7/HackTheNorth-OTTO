@@ -4,7 +4,7 @@
 import type { FastifyInstance } from "fastify";
 import type { Extension } from "@otto/shared";
 import { deviceStatus } from "../../gateway/device";
-import { listExtensions } from "../../composio/extensions";
+import { listExtensions, publishExtensionStatus } from "../../composio/extensions";
 import { createConnectLink, disconnectToolkit } from "../../composio/connect";
 
 export function extensionRoutes(app: FastifyInstance): void {
@@ -25,9 +25,16 @@ export function extensionRoutes(app: FastifyInstance): void {
     return reply.code(status).send({ error });
   });
 
-  app.post<{ Params: { id: string } }>("/api/extensions/:id/disconnect", async (req) => {
-    await disconnectToolkit(req.params.id);
-    return {};
+  app.post<{ Params: { id: string } }>("/api/extensions/:id/disconnect", async (req, reply) => {
+    try {
+      const removed = await disconnectToolkit(req.params.id);
+      await publishExtensionStatus(req.params.id);
+      return { removed };
+    } catch (err) {
+      return reply.code(502).send({
+        error: err instanceof Error ? err.message : "disconnect failed",
+      });
+    }
   });
 
   app.get("/api/device", async () => deviceStatus());

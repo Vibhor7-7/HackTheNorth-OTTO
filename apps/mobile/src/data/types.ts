@@ -17,7 +17,7 @@ type EventMap = { 'task.created': Task; 'task.updated': Task; 'step.created': Ta
 export type OttoEvent = { [K in keyof EventMap]: { type: K; data: EventMap[K] } }[keyof EventMap];
 export type NetworkState = 'online' | 'offline' | 'reconnecting';
 export type DemoScenario = 'default' | 'coffee' | 'food' | 'empty' | 'expired' | 'failure';
-export interface DemoState { tasks: Task[]; steps: TaskStep[]; approvals: Approval[]; connections: ConnectionRequest[]; actionItems: ActionItem[]; turns: Turn[]; memories: Memory[]; extensions: Extension[]; messages: ChatMessage[]; chatSessions: ChatSession[]; activeChatId: string; network: NetworkState; streaming: boolean; hydrated: boolean }
+export interface DemoState { device: Device; tasks: Task[]; steps: TaskStep[]; approvals: Approval[]; connections: ConnectionRequest[]; actionItems: ActionItem[]; turns: Turn[]; memories: Memory[]; extensions: Extension[]; messages: ChatMessage[]; chatSessions: ChatSession[]; activeChatId: string; network: NetworkState; streaming: boolean; hydrated: boolean }
 export interface OttoDataSource {
   getSnapshot(): DemoState;
   subscribe(listener: () => void): () => void;

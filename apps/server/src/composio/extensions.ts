@@ -4,6 +4,7 @@
 import type { Extension } from "@otto/shared";
 import { activeToolkitSlugs, composio, composioConfigured, items, log } from "./client";
 import { CURATED_TOOLS } from "./toolkits";
+import { publish } from "../bus";
 
 /** Shown when Composio is unconfigured so the Connections tab is never empty. */
 const PLACEHOLDERS: Extension[] = Object.keys(CURATED_TOOLS).map((slug) => ({
@@ -65,6 +66,27 @@ export async function listExtensions(): Promise<Extension[]> {
       error: err instanceof Error ? err.message : String(err),
     });
     return PLACEHOLDERS;
+  }
+}
+
+/**
+ * Announce a toolkit's current status. Called whenever a connection completes or is
+ * removed, because otherwise the Connections tab and the "Needs you" card show a
+ * stale status until the next manual refresh - and the moment a Connect Link
+ * resolves itself is the closing beat of S0 (APP-7).
+ */
+export async function publishExtensionStatus(toolkit: string): Promise<void> {
+  const slug = toolkit.toLowerCase();
+  try {
+    const all = await listExtensions();
+    const one = all.find((e) => e.id === slug);
+    if (one) publish({ type: "extension.updated", data: one });
+    else log.warn("no extension to announce", { toolkit: slug });
+  } catch (err) {
+    log.warn("could not announce extension status", {
+      toolkit: slug,
+      error: err instanceof Error ? err.message : String(err),
+    });
   }
 }
 

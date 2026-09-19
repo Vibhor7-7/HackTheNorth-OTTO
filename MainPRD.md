@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | Event | Hack the North 2026 |
-| Spec version | 1.10.0 (supersedes 1.9.0) |
+| Spec version | 1.11.0 (supersedes 1.10.0) |
 | Product name | **Otto.** The device, the agent, and the app are all Otto. Use the name in the system prompt, the app, and the pitch. |
 | Status | **Final for build.** Open decisions in Section 13 only. |
 | Tracks | OpenAI API Prizes, Composio, Expo (primary). Rox (natural fit, no extra work). Shopify: cut (D-25). Elastic: cut (D-12). |
@@ -276,7 +276,7 @@ Replaces the former MCP-1 to MCP-5 (D-10). Composio provides three things and we
 | ID | Pri | Requirement |
 |---|---|---|
 | CMP-1 | P0 | **Discovery.** `composio/discover.ts`: given a task goal, select **toolkits** from those the user has set up, then load a curated tool subset for each selected toolkit and return them in OpenAI function-calling shape via Composio's OpenAI provider. Write a `plan` step naming the toolkits chosen and the top three not chosen. Tool-level `search` is a best-effort hint that may widen the candidate set; it must never be the only path, and a bare `limit` must never be passed (D-26). |
-| CMP-2 | P0 | **Managed auth.** No per-integration tokens in env. Connected accounts live in Composio, scoped to `COMPOSIO_USER_ID`. Pre-connect **Google Calendar and GitHub** before the demo. Create the **Gmail** auth config but leave it **unconnected** - that absence is S0 (D-16). Creating a Connect Link needs an API key with `connected_accounts` **write** access, and uses `connectedAccounts.link(userId, authConfigId, { callbackUrl })` - `.initiate` returns 400 for Composio-managed OAuth configs, which is what every dashboard-created toolkit is. |
+| CMP-2 | P0 | **Managed auth.** **Reconnecting is silent once a grant exists:** calling connect on a toolkit the user has authorised before completes with no interaction, because the provider still holds the OAuth grant. So merely testing the Connect button re-activates a toolkit and quietly kills S0. Check `GET /api/extensions` reads `needs_auth` for the S0 toolkit immediately before any rehearsal. No per-integration tokens in env. Connected accounts live in Composio, scoped to `COMPOSIO_USER_ID`. Pre-connect **Google Calendar and GitHub** before the demo. Create the **Gmail** auth config but leave it **unconnected** - that absence is S0 (D-16). Creating a Connect Link needs an API key with `connected_accounts` **write** access, and uses `connectedAccounts.link(userId, authConfigId, { callbackUrl })` - `.initiate` returns 400 for Composio-managed OAuth configs, which is what every dashboard-created toolkit is. |
 | CMP-3 | P0 | **Execution.** `composio/execute.ts` exposes `executeTool(slug, args)` which calls Composio execution for the user, with 30 s timeout, one retry, and structured errors. **Only `approvals/gate.ts` imports this file.** |
 | CMP-4 | P0 | **Connect Link flow.** When execution returns a needs-authentication result, do not fail the task. Create a ConnectionRequest (7.3), set task status `awaiting_connection`, and surface the Connect Link in the app's "Needs you" card (APP-1, APP-7). When the user completes it, retry the exact same tool call once, then continue. This is demo scenario S0. |
 | CMP-5 | P0 | **Risk tiering of Composio tools.** Tier is derived from the tool slug by rule (7.6), with an argument-level override that can raise but never lower. Unknown tools default to R2. Replaces MCP-5. |
@@ -327,7 +327,7 @@ Expo, iOS target, single user, `APP_API_KEY`. **Four tabs: Home, Context, Connec
 | ID | Pri | Requirement |
 |---|---|---|
 | APP-4 | P0 | **Connected tools.** Every Composio toolkit visible to this user (CMP-6): name, icon, status (connected / needs auth / suggested), tool count. **Connect** opens the Connect Link from `POST /api/extensions/:id/connect`. Pull to refresh. Toolkits Otto used recently sort to the top. |
-| APP-5 | P1 | **Settings section** at the bottom: device (connected, last seen, state, battery), server URL, `DEMO_MODE` indicator, and a Disconnect action per toolkit. |
+| APP-5 | P0 | **Settings section** at the bottom: device (connected, last seen, state, battery), server URL, `DEMO_MODE` indicator, and a Disconnect action per toolkit, which really removes the connected account. Promoted from P1 because it is how S0 is reset between rehearsals. |
 
 **Chat tab**
 

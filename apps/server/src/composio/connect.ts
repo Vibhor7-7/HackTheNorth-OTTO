@@ -49,7 +49,33 @@ export async function createConnectLink(toolkit: string): Promise<ConnectLinkRes
   }
 }
 
-/** APP-5, P1. */
-export async function disconnectToolkit(toolkit: string): Promise<void> {
-  log.warn("disconnect not implemented yet (APP-5, P1)", { toolkit });
+/**
+ * APP-5. Removes this user's connected accounts for a toolkit, which is what makes
+ * the Disconnect button true rather than decorative. Also how S0 is reset between
+ * rehearsals: disconnect Gmail and the live Connect Link beat works again (D-16).
+ */
+export async function disconnectToolkit(toolkit: string): Promise<number> {
+  if (!composioConfigured()) return 0;
+  const slug = toolkit.toLowerCase();
+  try {
+    const accounts = items<{ id?: string; toolkit?: { slug?: string } | string; status?: string }>(
+      await composio().connectedAccounts.list({ userId: userId() } as never),
+    ).filter((a) => {
+      const s = typeof a.toolkit === "string" ? a.toolkit : a.toolkit?.slug;
+      return (s ?? "").toLowerCase() === slug;
+    });
+
+    for (const account of accounts) {
+      if (!account.id) continue;
+      await composio().connectedAccounts.delete(account.id);
+      log.info("disconnected", { toolkit: slug, account: account.id, was: account.status });
+    }
+    return accounts.length;
+  } catch (err) {
+    log.error("disconnect failed", {
+      toolkit: slug,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    throw err;
+  }
 }
