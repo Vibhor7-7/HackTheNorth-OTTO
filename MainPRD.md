@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | Event | Hack the North 2026 (Fri Sep 18 - Sun Sep 20) |
-| Spec version | 1.1.0 (supersedes 1.0.0) |
+| Spec version | 1.2.0 (supersedes 1.1.0) |
 | Product name | **Otto.** The device, the agent, and the app are all Otto. Use the name in the system prompt, the app, and the pitch. |
 | Status | **Final for build.** Open decisions in Section 13 only. |
 | Today | Saturday Sep 19 |
@@ -111,7 +111,7 @@ Voice assistants answer questions but cannot get work done across your real tool
 
 **Two-layer brain (unchanged, important)**
 
-- **Conversation layer.** OpenAI Realtime, audio to audio, transcription enabled. Handles the spoken turn with low latency. It has four function tools (7.4), mainly `run_task`. It never touches Composio.
+- **Conversation layer.** OpenAI Realtime, audio to audio, transcription enabled. Handles the spoken turn with low latency. It has the four control tools plus a **fast lane** of exactly two read-only calendar tools (7.4, VG-16). Fast-lane calls are executed by the gateway through the same gate as everything else, with a hard timeout. Anything else goes through `run_task`.
 - **Task layer.** A text LLM (OpenAI, Responses API) running a tool loop. Tools come from Composio. Slower, does the real work, runs asynchronously from the voice turn.
 
 **Two background workers and one extra consumer (new in 1.1).**
@@ -119,6 +119,8 @@ Voice assistants answer questions but cannot get work done across your real tool
 - **Action Item Extractor** (Section 6.9). After every voice turn is persisted, a cheap OpenAI model scans the transcript for commitments the user made and writes ActionItems. The Home tab shows them; one tap turns an item into a normal Task through the same `run_task` path, so the approval gate still applies. Never on the voice path.
 - **Context Agent** (Section 6.10). Backs the Chat tab. An OpenAI Responses call with read-only tools over the store (turns, tasks, memories, profile). It can start a task through `run_task` and nothing else. It never calls Composio.
 - Both read the same SQLite file the gateway writes. There is one store.
+
+**Why the voice agent gets a fast lane at all.** "Am I free at 3?" should be answered in the same breath, not handed off with "on it." Realtime function tools are executed by our gateway, so nothing bypasses the gate or the log. The only real constraint is that the voice model cannot speak while a call is outstanding, which is why the fast lane is read-only, single-call, capped at two tools, and hard-timed out at 2.5 s with escalation to `run_task` (VG-16). If the calendar tools are flaky on the venue network, delete them from the allowlist (CMP-9) and the product still works.
 
 **Why the Task Agent sits between the LLM and Composio.** Composio can execute tools directly from an agent loop. We do not let it. Every tool call the LLM selects passes through our Approval Gate (AP-1) before `composio.tools.execute()` runs. This is what makes SMS approval impossible to bypass and gives the app a complete step log. It is also the "decision-making under uncertainty" story for judges.
 
@@ -241,7 +243,7 @@ Owner: Vibhor.
 | VG-2 | P0 | Own the OpenAI Realtime WS. Device never talks to OpenAI, never holds a key. Session config per 7.5: `turn_detection: null`, input and output `audio/pcm` 24 kHz, `output_modalities: ["audio"]`, input transcription enabled. |
 | VG-3 | P0 | Turn flow. `ptt_start`: send `input_audio_buffer.clear`. Each binary frame: base64 and send `input_audio_buffer.append`. `ptt_end`: send `input_audio_buffer.commit` then `response.create`. `ptt_cancel`: `input_audio_buffer.clear`, no response. |
 | VG-4 | P0 | **Pace downstream audio.** Realtime produces audio faster than real time; device buffer is about 2 s. Queue `response.output_audio.delta` server side, decode base64, send to device no more than 500 ms ahead of real-time playback (proposed). Wrap each response in `speak_start` / `speak_end`. |
-| VG-5 | P0 | Barge-in: `ptt_start` while a response is in flight sends `response.cancel`, drops queued downstream audio, sends `speak_end` with `reason: "interrupted"`. |
+| VG-5 | P0 | Barge-in: `ptt_start` while a response is in flight sends `response.cancel`, drops queued downstream audio, sends `speak_end` with `reason: "interrupted"`. If a fast-lane function call (VG-16) is outstanding, abandon it: ignore its result when it returns, do not send `function_call_output`. |
 | VG-6 | P0 | Register the function tools in 7.4 on the session. On `response.function_call_arguments.done`, route to the Task Agent, return output as a `conversation.item.create` of type `function_call_output`, then `response.create` so the model speaks the acknowledgement. |
 | VG-7 | P0 | Server-initiated speech. When a task completes, needs input, needs approval, or needs a connection, and the device is idle: `conversation.item.create` with the text, then `response.create`. If mid-turn, queue until idle. |
 | VG-8 | P0 | **Transcription.** `audio.input.transcription` set to `TRANSCRIBE_MODEL`. Persist per turn: user text from `conversation.item.input_audio_transcription.completed`, assistant text from `response.output_audio_transcript.done`. This is what the app shows and what memory is built from (DATA-1). Realtime is the only transcript source (D-13). |
@@ -252,6 +254,8 @@ Owner: Vibhor.
 | VG-13 | P0 | **Session cleanup.** Close the Realtime WS on every error path (`finally`). Idle timeout `REALTIME_IDLE_TIMEOUT_MS` (default 60 s) closes the session; VG-9 reopens on next `ptt_start`. An orphaned session streaming silence bills continuously. |
 | VG-14 | P0 | Accept legacy text-frame aliases from the device and treat them as the JSON equivalents: `START` = `ptt_start`, `STOP` = `ptt_end`, `CANCEL` = `ptt_cancel`, `PING` = `ping`. When the device sent legacy frames, reply with legacy frames: `AUDIO_START:24000` = `speak_start`, `AUDIO_END` = `speak_end`, `THINKING` = `state:thinking`, `TRANSCRIPT:<text>` and `ANSWER:<text>` for transcripts. Detect mode from the first text frame. |
 | VG-15 | P0 | Per-turn log line: `turn_id`, `ptt_end_at`, `first_audio_byte_at`, `latency_ms`, `user_text`, `assistant_text`, `tool_calls[]`. This is NF-1 and it is how the demo gets debugged. |
+| VG-16 | P0 | **Fast lane.** The two calendar tools in 7.4 are registered on the Realtime session as function tools. On `response.function_call_arguments.done` for one of them, the gateway calls `approvals/gate.ts` (R0, passes immediately, step logged) then Composio, with a **2.5 s hard timeout**. On success: send `function_call_output` with the result and `response.create`; the model answers in the same turn. On timeout or error: send `function_call_output` of `{"status":"deferred"}` and `response.create` (the model says it will follow up), and spawn the same call as a Task through `run_task` so VG-7 speaks the answer when it lands. Log `fast_lane: true` and the duration on the step. |
+| VG-17 | P1 | Fast-lane session instruction: "For questions about the user's calendar, call the calendar tool and answer directly. For anything that changes the world, call run_task." Keep it to those two sentences. |
 
 Verify event names against current Realtime docs before coding. Names changed between beta and GA.
 
@@ -286,6 +290,7 @@ Replaces the former MCP-1 to MCP-5 (D-10). Composio provides three things and we
 | CMP-6 | P1 | Extensions screen data: list Composio toolkits with connection status for the user (connected / needs_auth / suggested) so APP-4 has real data. |
 | CMP-7 | P1 | Cache discovery results per goal string for the session so repeated demo runs do not pay the search cost twice. |
 | CMP-8 | P0 | Verify exact SDK method names for search, connect-link creation, and execution against docs.composio.dev before coding CMP-1, CMP-3, CMP-4. Tool Router is beta; pin the package version and do not rely on undocumented behaviour. |
+| CMP-9 | P0 | **Fast-lane allowlist.** `composio/fastlane.ts` exports exactly two Composio tools for the voice agent: Google Calendar free/busy and Google Calendar list events for a date. Both are R0. Nothing else is added to this file without a Decision. Measure each against Composio on the demo network; if p95 is over 2 s, remove it from the allowlist and the voice agent falls back to `run_task` for calendar questions with no other change. |
 
 **Why not let Composio's Tool Router meta-tool run the whole loop.** Tool Router's native meta-tool bundles search, auth, and execute into one call. That is elegant and it would bypass AP-1. We use Composio for the three capabilities separately so the approval gate sits between LLM choice and execution. If the SDK does not expose them separately, use Composio's before-execute modifier as the gate point instead. Either way AG-3 holds.
 
@@ -588,6 +593,8 @@ interface HomePayload {                     // GET /api/home
 
 ### 7.4 Function tools on the Realtime session
 
+Control tools (executed by the gateway):
+
 ```jsonc
 run_task        { goal: string, context?: string }     -> { task_id, status: "started" }
 answer_question { task_id: string, answer: string }    -> { ok: true }
@@ -595,7 +602,14 @@ get_task_status { task_id?: string }                   -> { status, spoken_summa
 cancel_task     { task_id?: string }                   -> { ok: true }
 ```
 
-Keep this list tiny. The voice model decides between chatting and delegating. It does not do the work.
+Fast-lane tools (VG-16, CMP-9; executed by the gateway through the gate, 2.5 s timeout):
+
+```jsonc
+calendar_free_busy   { start: string, end: string }        -> { busy: [{start, end}] } | { status: "deferred" }
+calendar_list_events { date: string }                      -> { events: [{title, start, end, attendees}] } | { status: "deferred" }
+```
+
+Six tools total. The voice model answers calendar questions itself and delegates everything else. It never writes.
 
 ### 7.5 Realtime session configuration
 
@@ -687,6 +701,8 @@ Not a separate scenario. It is the first 20 seconds of S1, and it only works if 
 
 ### S1. Coffee chat scheduling (Google Calendar) - build first
 
+Optional warm-up (5 s, fast lane): "Am I free Thursday afternoon?" Otto answers in the same turn from the calendar. Then:
+
 > "Find 30 minutes with Sam next week for a coffee chat and send an invite."
 
 - Agent reads free/busy (R0), creates event with attendee (R1), speaks the chosen time.
@@ -722,12 +738,14 @@ Times are targets from a morning start. If it is later than that, compress from 
 | **09:00 to 11:00** | Transcription persisted, function tool routing works, `run_task` returns "on it". | VG-6, VG-8, VG-15, AG-1, DATA-1, DATA-2 |
 | **11:00 to 13:00** | Composio wired: discovery returns Calendar tools, execute creates an event through the gate. **S1 passes from fake device.** | CMP-1, CMP-2, CMP-3, CMP-5, CMP-8, AP-1, AP-2, AG-2 to AG-5, AG-7 |
 | **13:00 to 15:00** | SMS approvals end to end. Connect Link flow end to end. **S0 + S1 pass from fake device.** Home tab against real data: Needs you, recent activity, Task detail. | AP-3 to AP-6, AP-8, CMP-4, APP-1, APP-2, APP-7, APP-13, APP-15 |
-| **15:00 to 17:00** | **S1 passes from real hardware on the stage network path.** S2 passes from fake device. Action items extracting and approvable from Home. Context tab (transcript + notes). Connections tab. | FW-10, VG-14, NF-6, ACT-1 to ACT-4, ACT-7, AG-12, DATA-4, DATA-6, APP-3, APP-6, APP-11, APP-4, CMP-6 |
+| **15:00 to 17:00** | **S1 passes from real hardware on the stage network path.** S2 passes from fake device. Action items extracting and approvable from Home. Context tab (transcript + notes). Connections tab. Calendar fast lane: "am I free at 3" answered in one turn. | FW-10, VG-14, NF-6, VG-16, CMP-9, ACT-1 to ACT-4, ACT-7, AG-12, DATA-4, DATA-6, APP-3, APP-6, APP-11, APP-4, CMP-6 |
 | **17:00 to 19:00** | S2 from hardware. S3 per OD-5. Messy-data beat verified (AG-9). Chat tab streaming with read tools. Native polish pass (APP-10). | AG-6, AG-9, AG-11, CHAT-1 to CHAT-3, CHAT-6, DATA-7, APP-12, APP-10 |
 | **19:00 to 21:00** | P1 polish only: LED states, memory injection, Otto mentions action items, chat can start tasks, citations, settings, badges, Codex review. **Record backup videos for S0/S1, S2, S3, and the Home action-item approve.** | FW-7, AG-8, ACT-5, ACT-6, CHAT-4, CHAT-5, CHAT-7, APP-5, APP-14, DEVX-4 |
 | **21:00 to 23:59** | Full dry runs, twice each, from hardware. Codex evidence collected. Bug fixes only. | DEVX-3, success criteria 1 |
 | **23:59** | **Freeze.** |
 | **Sunday** | Pitch, Devpost, video edit, judge check-ins. No code except a demo-breaking bug. | Section 16 |
+
+**Cut rule for the fast lane.** If either calendar tool has a p95 over 2 s on the stage network, or it has caused one frozen turn in rehearsal, remove it from CMP-9. Calendar questions then go through `run_task` like everything else. Do not debug it past 18:00.
 
 **Cut rule for the app.** If S2 has not passed from hardware by 17:30, the Chat tab (CHAT-*, APP-12) drops to P1 and its slot goes to S2. The other three tabs stay P0. A demo with three excellent tabs beats four half-done ones, and the Expo judges will notice the difference.
 
@@ -835,6 +853,7 @@ See D-12. The honest reason: it would not make the hack easier and it would not 
 | **D-20** | Sep 19 | **Action items are extracted per turn by the cheapest OpenAI model that returns clean JSON, off the voice path, and approved with one tap. Approval creates a normal Task.** | The Home tab needs something to show that the device is paying attention between commands. Routing approval through `run_task` means the risk gate and step log apply unchanged (AG-12). |
 | **D-21** | Sep 19 | **The Chat tab is a read-mostly context agent. Its only write is `run_task`.** | Talking to Otto about your day is a memory feature, not an action feature. Keeping Composio out of it preserves AG-3 and keeps the chat fast. |
 | **D-22** | Sep 19 | **When SMS is off or fails, the Home tab is the confirmation surface and Otto says so aloud.** | The demo works with or without a working SMS number. One code path decides which sentence Otto speaks. |
+| **D-23** | Sep 19 | **Fast lane: two read-only Google Calendar tools registered directly on the Realtime session, executed by the gateway through the gate, 2.5 s timeout, escalation to `run_task`. Realtime's remote MCP feature stays off. Closes OD-8 with the precise version.** | OD-8 conflated "tools on the voice agent" with "tools the gateway does not execute." Function tools are executed by us, so nothing bypasses the gate. The real limit is that the voice model cannot speak during an outstanding call, so the lane is read-only, capped at two, and timed out. Calendar is the only one the demo needs. If it is flaky, delete it from CMP-9 and nothing else changes. |
 
 ---
 
@@ -845,7 +864,7 @@ See D-12. The honest reason: it would not make the hack easier and it would not 
 | OD-2 | SMS provider: Twilio or Linq? | Try Linq (sponsor) for 45 minutes. If inbound webhooks are not working, Twilio. Provision the number **now**; verification can take hours. | Sat noon |
 | OD-5 | How does S3 execute? | Check Composio's catalog for a food-delivery toolkit first. Then (a) browser toolkit, (b) supported alternative service, (c) mock custom tool labelled as demo. | Sat noon |
 | OD-9 | Hosting: laptop + cloudflared, or Railway? | cloudflared. Zero deploy step, and the laptop is on stage anyway. Have the Railway config ready as a fallback if the tunnel is flaky on the venue uplink. | Sat 15:00 (NF-6) |
-| ~~OD-1, OD-3, OD-4, OD-6, OD-7, OD-8~~ | | Resolved: D-10, D-14, D-13, Section 11, D-18, D-11. | |
+| ~~OD-1, OD-3, OD-4, OD-6, OD-7, OD-8~~ | | Resolved: D-10, D-14, D-13, Section 11, D-18, D-23. | |
 
 ---
 
@@ -888,6 +907,7 @@ Judge check-ins: OpenAI, Composio, and Expo booths early Saturday and again mid-
 | Two Sams beat feels contrived | Low | It is the same ambiguity every real contact list has; say so in one sentence |
 | Action item extraction produces junk on stage | Medium | Confidence threshold (ACT-2), commitment-only rule (ACT-6), seeded turns (ACT-7). Rehearse the exact sentence that produces the meeting item. |
 | Chat tab is half-built at freeze | Medium | Cut rule in Section 9. A hidden tab is better than a broken one. |
+| Fast-lane calendar call freezes a voice turn | Medium | 2.5 s timeout with `deferred` escalation (VG-16), barge-in abandons the call (VG-5), cut rule in Section 9. |
 | Four tabs dilute the frontend owners | Medium | Home first, then Context, then Connections, then Chat. Each tab ships complete before the next starts. |
 
 ---
@@ -926,6 +946,7 @@ Judge check-ins: OpenAI, Composio, and Expo booths early Saturday and again mid-
 
 ## 17. Changelog
 
+- **1.2.0** (Sep 19): Fast lane added: two read-only Google Calendar tools on the Realtime session, gateway-executed through the gate with 2.5 s timeout and escalation to `run_task` (VG-16, VG-17, CMP-9, 7.4, D-23). OD-8 closed with the precise version: remote MCP off, gateway-executed function tools on. VG-5 extended to abandon outstanding fast-lane calls on barge-in. Cut rule for the fast lane in Section 9. Optional S1 warm-up line.
 - **1.1.0** (Sep 19): Named Otto (D-18). App restructured into four tabs, Home / Context / Connections / Chat (D-19, APP-* rewritten, APP-11 to APP-15 added, APP-9 removed). Action item extraction worker (6.9, ACT-1 to ACT-7, D-20). Context agent for the Chat tab (6.10, CHAT-1 to CHAT-7, D-21). `run_task` as the single Task entry point with `source` (AG-12). Home as the confirmation surface when SMS is off (D-22, AP-6, VG-10). New endpoints for home, turns, action items, memories, extension connect, chat (7.2). ActionItem, Memory, ChatMessage, HomePayload, TaskSource added (7.3). DATA-4 to P0, DATA-6 and DATA-7 added. Build order and cut rule updated. Ownership, risks, and pitch updated.
 - **1.0.0** (Sep 19): Final build spec. Composio replaces the MCP layer (D-10, D-11, CMP-*). Elastic cut (D-12). Cohere removed (D-13). Task agent on OpenAI Responses (D-14). Legacy device protocol accepted as aliases (D-15, VG-14, FW-10). S0 live-connect beat added (D-16, CMP-4, AP-8, APP-7). AG-7 and AG-9 promoted to P0 (D-17). Realtime session config and transcription pinned in 7.5. Risk rules for Composio slugs in 7.6. Codex evidence requirements added (DEVX-*). Saturday build order rewritten by slot. Session cleanup and cost controls added (VG-13, NF-7). Tracks section added (11).
 - **0.1.0** (Sep 18): Initial spec.
