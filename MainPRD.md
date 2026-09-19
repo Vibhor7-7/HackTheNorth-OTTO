@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | Event | Hack the North 2026 |
-| Spec version | 1.6.0 (supersedes 1.5.0) |
+| Spec version | 1.7.0 (supersedes 1.6.0) |
 | Product name | **Otto.** The device, the agent, and the app are all Otto. Use the name in the system prompt, the app, and the pitch. |
 | Status | **Final for build.** Open decisions in Section 13 only. |
 | Tracks | OpenAI API Prizes, Composio, Expo (primary). Rox (natural fit, no extra work). Shopify: cut (D-25). Elastic: cut (D-12). |
@@ -293,8 +293,8 @@ Replaces the former MCP-1 to MCP-5 (D-10). Composio provides three things and we
 | AP-1 | P0 | Before every tool call, classify by tier. **R0** read-only: run. **R1** reversible write: run, log, mention in spoken summary. **R2** money, orders, sends on the user's behalf, destructive or public changes: hold for approval. |
 | AP-2 | P0 | Tier comes from CMP-5. Argument override raises tier for any call with an amount, price, recipient, or `publish` field. Never lowers. |
 | AP-3 | P0 | R2 flow: create Approval (`pending`) with a plain-language summary and key facts (what, to whom, how much). Task status `awaiting_approval`. It appears instantly in the Home tab's "Needs you" card over SSE (APP-1). Device speaks "check the app to confirm." |
-| AP-4 | P0 | `POST /api/approvals/:id/decision` sets `approved` or `denied`, and resumes or cancels the task. Expire after 5 minutes as denied, swept on a timer as well as on read so a waiting task never hangs. |
-| AP-5 | P0 | An approved action executes exactly once with exactly the arguments shown to the user (`args_hash`). Changed arguments require a new approval. |
+| AP-4 | P0 | `POST /api/approvals/:id/decision` sets `approved` or `denied`, and resumes or cancels the task. Expire after 5 minutes as denied, swept on a timer as well as on read so a waiting task never hangs. **The held call suspends inside the gate rather than being replayed later** (D-30): the arguments stay in the closure that hashed them, which is what makes AP-5 true by construction instead of by trusting a re-serialisation. A denied or expired approval ends the task as `cancelled`, not `failed` - nothing went wrong. |
+| AP-5 | P0 | An approved action executes exactly once with exactly the arguments shown to the user (`args_hash`). Changed arguments require a new approval. The gate re-checks the hash immediately before executing and refuses if it differs, so the guarantee is enforced rather than assumed. |
 | AP-6 | P0 | The app is the **only** confirmation surface (APP-1, Home tab "Needs you"). There is no second channel to fall back to, which makes APP-1 the most important screen in the product: it is the entire trust story on stage (D-24). |
 | ~~AP-7~~ | | ~~Verify inbound sender matches `SMS_USER_PHONE`; validate provider webhook signature~~ `[REMOVED]` D-24. |
 | AP-8 | P0 | ConnectionRequests (CMP-4) use the same app card as Approvals. One interaction model: the "Needs you" card fills when the agent needs you, for one of two reasons. |
@@ -876,6 +876,7 @@ See D-12. The honest reason: it would not make the hack easier and it would not 
 | **D-27** | **WhatsApp is cut. Gmail carries S0 and S2 on the agent path; GitHub joins the fast lane, read-only.** 7.4 goes from six tools to eight; CMP-9 from two to four. | WhatsApp is the Meta Business Cloud API: a business account, a registered number, a system-user token, registered test recipients, and a 24-hour window or an approved template before a plain text message will send. That is a lot of setup standing behind one demo beat, and none of it is visible to a judge. Gmail is one OAuth click on the account already in use, sends to anyone, and `GMAIL_SEND_EMAIL` is R2 by rule with no override - so S0's connect beat and S2's approval beat both work with less to go wrong. GitHub on the fast lane adds a second read-only question the voice agent can answer in one breath ("what's assigned to me?"), which shows the fast lane is a general capability rather than a calendar special case. Both GitHub tools take no required arguments, so the voice model cannot get them wrong. |
 | **D-28** | **GitHub moves off the fast lane onto the agent path, with thirteen tools instead of two.** 7.4 returns to six tools, CMP-9 to two. | The fast lane's constraints were what limited GitHub: single call, no required arguments, 2.5 s. That only ever allowed the two account-wide list calls, because everything interesting needs `owner` and `repo` - which the voice model cannot know. On the agent path the loop resolves a repo name first (`LIST_REPOSITORIES_FOR_THE_AUTHENTICATED_USER`) and then acts, so GitHub gains reading issues and pull requests in a named repo, searching, creating and updating issues, assigning people, commenting, and merging. Verified: "how many open issues are assigned to me, and what repos do I have" chained three read calls into one spoken answer, and "merge pull request 1" stopped at an approval card without merging. The cost is that a GitHub question now takes a "on it" plus a follow-up instead of one breath; the calendar keeps the fast lane because that is the question people ask mid-sentence. |
 | **D-29** | **Otto can open pull requests. `GITHUB_CREATE_A_PULL_REQUEST` is R1, not R0.** `GITHUB_LIST_BRANCHES` added so the agent can resolve `head` and `base`. | Asked for as R0. R0 and R1 behave identically - the gate only holds R2 - so R1 delivers the same thing while keeping "R0 = read-only" true, which matters because the app shows the tier on every step and the risk model is the safety story. Opening a PR is reversible by closing it; merging is not, and stays R2. |
+| **D-30** | **An approval suspends the agent loop in place; it is not replayed from the log.** | The held call's arguments are only stored redacted in the TaskStep (DATA-3), so rebuilding the call from the log could send something subtly different from what the user approved - exactly the thing AP-5 exists to prevent. Suspending keeps the real arguments in the closure that hashed them. The cost, stated plainly: a suspended loop lives in memory, so restarting the server with an approval outstanding leaves that task at `awaiting_approval` for good. Acceptable because approvals expire in five minutes and a stuck task is visible on Home rather than silent. Time spent waiting for a human is excluded from the agent's own 3-minute budget, or a task approved after four minutes would die the instant it was allowed to proceed. |
 
 ---
 
@@ -971,6 +972,11 @@ Judge check-ins: OpenAI, Composio and Expo booths early, and once more after sta
 
 ## 17. Changelog
 
+- **1.7.0**: AP-4 implemented. An R2 call now suspends inside the gate and resumes
+  when the app decides (D-30), so approve actually executes, deny executes nothing,
+  and expiry ends the task as `cancelled`. AP-5 is enforced by re-checking
+  `args_hash` immediately before execution. AP-4 and AP-5 restated to describe the
+  suspension model and its memory-only limitation.
 - **1.6.1**: Otto can open pull requests (D-29). `GITHUB_CREATE_A_PULL_REQUEST`
   added to the curated set and pinned R1, with `GITHUB_LIST_BRANCHES` alongside it
   so `head` and `base` can be resolved rather than guessed. 7.6's override note

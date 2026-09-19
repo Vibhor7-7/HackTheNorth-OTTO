@@ -11,6 +11,7 @@
 import type { RiskTier } from "@otto/shared";
 import { addStep, argsHash, createApproval, createConnectionRequest, updateTask } from "../store";
 import { classify, toolkitOf } from "./tiers";
+import { waitForDecision } from "./pending";
 import { executeTool, isToolkitConnected } from "../composio/execute";
 import { createConnectLink } from "../composio/connect";
 import { speak } from "../agent/notify";
@@ -30,7 +31,8 @@ export interface GateRequest {
 
 export type GateResult =
   | { outcome: "ok"; risk: RiskTier; result: unknown; duration_ms: number }
-  | { outcome: "held"; risk: RiskTier; approval_id: string }
+  /** AP-4: the user said no, or let it expire. Not an error - a decision. */
+  | { outcome: "denied"; risk: RiskTier; reason: "denied" | "expired" }
   | { outcome: "needs_connection"; risk: RiskTier; toolkit: string; connection_id?: string }
   | { outcome: "error"; risk: RiskTier; message: string };
 
@@ -56,15 +58,17 @@ export async function gate(req: GateRequest): Promise<GateResult> {
     return raiseConnection(req, risk, toolkit, step.id, 0);
   }
 
-  // AP-3: R2 never executes here. It stops, and the app asks.
+  // AP-3: R2 does not execute here. It stops, the app asks, and this call suspends
+  // until the answer comes back (AP-4).
   if (risk === "R2") {
+    const hash = argsHash(req.args);
     const approval = createApproval({
       task_id: req.task_id,
       step_id: step.id,
       summary: req.intent ?? `Run ${req.slug}`,
       facts: factsFrom(req.args),
-      // AP-5: approval is bound to these exact arguments.
-      args_hash: argsHash(req.args),
+      // AP-5: the approval is bound to these exact arguments.
+      args_hash: hash,
       channel: "app",
     });
     addStep({
@@ -79,19 +83,36 @@ export async function gate(req: GateRequest): Promise<GateResult> {
     // D-24: the app is the only confirmation surface, so say so.
     speak({ text: "I've put that in the app to confirm.", reason: "needs_approval", task_id: req.task_id });
     log.info("held for approval", { task_id: req.task_id, slug: req.slug, approval: approval.id });
-    return { outcome: "held", risk, approval_id: approval.id };
+
+    const decision = await waitForDecision(approval.id, req.task_id);
+
+    if (decision !== "approved") {
+      addStep({
+        task_id: req.task_id,
+        kind: "final",
+        toolkit,
+        tool_slug: req.slug,
+        risk,
+        summary: decision === "expired"
+          ? "Expired without an answer, so nothing was done."
+          : "You declined, so nothing was done.",
+      });
+      return { outcome: "denied", risk, reason: decision };
+    }
+
+    // AP-5, stated as an assertion rather than a comment: the arguments about to
+    // run are the ones that were hashed into the approval. They cannot differ -
+    // they are the same closure - but if that ever stops being true, refuse.
+    if (argsHash(req.args) !== hash) {
+      log.error("arguments changed after approval; refusing", { task_id: req.task_id, slug: req.slug });
+      return { outcome: "error", risk, message: "the arguments changed after you approved them" };
+    }
+
+    updateTask(req.task_id, { status: "running" });
+    return runNow(req, risk, toolkit, step.id);
   }
 
   return runNow(req, risk, toolkit, step.id);
-}
-
-/**
- * AP-5: called by the approval resume path once the user has approved. The
- * caller is responsible for checking `args_hash` still matches - changed
- * arguments need a new approval, not this.
- */
-export async function executeApproved(req: GateRequest, stepId: string): Promise<GateResult> {
-  return runNow(req, classify(req.slug, req.args), toolkitOf(req.slug), stepId);
 }
 
 async function runNow(

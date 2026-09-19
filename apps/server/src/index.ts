@@ -5,6 +5,7 @@
 import { buildApp } from "./api/server";
 import { attachDeviceGateway } from "./gateway/device";
 import { expireStaleApprovals } from "./store";
+import { settleDecision } from "./approvals/pending";
 import { env } from "./env";
 import { logger } from "./log";
 
@@ -21,6 +22,8 @@ await app.listen({ port: env.port, host: "0.0.0.0" });
 const sweeper = setInterval(() => {
   for (const a of expireStaleApprovals()) {
     log.info("approval expired", { task_id: a.task_id });
+    // AP-4: expiry counts as denied, and the waiting task has to hear about it.
+    settleDecision(a.id, "expired");
   }
 }, 15000);
 

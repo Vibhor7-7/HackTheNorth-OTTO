@@ -70,6 +70,9 @@ htn-voice/         Friday spike, reference only - not wired into the build
   tools that cannot work and silently skips S0's Connect Link beat.
 - **There is no SMS channel** (D-24). The app is the only confirmation surface, so
   never add a second one without a Decision.
+- **An R2 approval suspends the agent loop in place** (AP-4, D-30). Never rebuild a
+  held call from its TaskStep: those arguments are redacted, and AP-5 promises the
+  user that exactly what they saw is what runs.
 - **Raw audio is never stored** (DATA-1). Transcripts only.
 
 ## Unfinished seams

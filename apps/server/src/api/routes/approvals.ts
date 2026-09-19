@@ -4,6 +4,7 @@
 
 import type { FastifyInstance } from "fastify";
 import { decideApproval, expireStaleApprovals, getApproval, listApprovals } from "../../store";
+import { settleDecision } from "../../approvals/pending";
 import { logger } from "../../log";
 
 const log = logger("api.approvals");
@@ -31,12 +32,14 @@ export function approvalRoutes(app: FastifyInstance): void {
         return reply.code(409).send({ error: `already ${existing.status}`, approval: existing });
       }
 
-      const approval = decideApproval(req.params.id, decision === "approve" ? "approved" : "denied", "app");
+      const status = decision === "approve" ? "approved" : "denied";
+      const approval = decideApproval(req.params.id, status, "app");
       log.info("decision", { task_id: existing.task_id, decision });
 
-      // [TODO AP-4] Resume or cancel the held task. The gate holds the call and
-      // its args_hash (AP-5); this is where it is released.
-      return approval;
+      // AP-4: release the suspended task. If nothing was waiting - the server
+      // restarted while this sat pending - say so rather than pretend it ran.
+      const resumed = settleDecision(req.params.id, status);
+      return { ...approval, resumed };
     },
   );
 }

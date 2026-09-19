@@ -25,7 +25,11 @@ const openai = new OpenAI({ apiKey: env.openaiApiKey });
 type Item = Record<string, unknown>;
 
 export interface LoopOutcome {
-  status: "succeeded" | "failed" | "needs_input" | "awaiting_approval" | "awaiting_connection";
+  status:
+    | "succeeded" | "failed" | "needs_input"
+    | "awaiting_approval" | "awaiting_connection"
+    /** AP-4: declined or expired. A finished task, not a stuck one. */
+    | "denied";
   spoken_summary: string;
   detail_md?: string;
 }
@@ -75,12 +79,16 @@ export async function runLoop(taskId: string, goal: string, context?: string): P
   ];
 
   let calls = 0;
+  let waitedMs = 0;
 
   while (true) {
     if (calls >= MAX_TOOL_CALLS) {
       return fail(taskId, `I ran out of steps on that after ${calls} tool calls.`);
     }
-    if (Date.now() - started > MAX_WALL_MS) {
+    // The three minutes are the agent's, not the user's: time spent waiting on an
+    // approval does not count, or a task held for four minutes would die the moment
+    // it was approved.
+    if (Date.now() - started - waitedMs > MAX_WALL_MS) {
       return fail(taskId, "that took too long, so I stopped.");
     }
 
@@ -129,16 +137,34 @@ export async function runLoop(taskId: string, goal: string, context?: string): P
 
       calls++;
 
-      // AG-3: the only path to execution.
+      // AG-3: the only path to execution. This can block for minutes on an R2
+      // while the user decides (AP-4), so the wait is measured and excluded.
+      const gateStarted = Date.now();
       const result = await gate({
         task_id: taskId,
         slug: name,
         args,
         intent: `${goal} - ${name}`,
       });
+      if (result.outcome === "denied" || result.outcome === "ok") {
+        // Only an R2 can have waited; anything under a second was not a human.
+        const elapsed = Date.now() - gateStarted;
+        if (elapsed > 3000) waitedMs += elapsed;
+      }
 
-      if (result.outcome === "held") {
-        return { status: "awaiting_approval", spoken_summary: "I've put that in the app to confirm." };
+      // AP-4: the gate suspends on an R2 until the user answers, so reaching here
+      // means the answer is already in. A refusal ends the task rather than being
+      // fed back as a retryable error - the user said no, and the agent must not
+      // look for another way to do it.
+      if (result.outcome === "denied") {
+        const spoken = result.reason === "expired"
+          ? "That timed out waiting for you, so I didn't do it."
+          : "Okay, I didn't do that.";
+        // AG-11: every task reaches exactly one terminal state with a spoken line.
+        // A refusal is `cancelled`, not `failed` - nothing went wrong.
+        updateTask(taskId, { status: "cancelled", spoken_summary: spoken });
+        speak({ text: spoken, reason: "task_done", task_id: taskId });
+        return { status: "denied", spoken_summary: spoken };
       }
       if (result.outcome === "needs_connection") {
         return {
@@ -151,11 +177,7 @@ export async function runLoop(taskId: string, goal: string, context?: string): P
       input.push({
         type: "function_call_output",
         call_id: callId,
-        output: JSON.stringify(
-          result.outcome === "ok"
-            ? trim(result.result)
-            : { error: result.message },
-        ).slice(0, 6000),
+        output: safeJson(result.outcome === "ok" ? trim(result.result) : { error: result.message }),
       });
     }
   }
