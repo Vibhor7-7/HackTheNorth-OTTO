@@ -39,7 +39,9 @@ function parseTierOverrides(raw: string): Record<string, "R0" | "R1" | "R2"> {
 
 export const env = {
   port: num("PORT", 3000),
-  publicBaseUrl: opt("PUBLIC_BASE_URL", "http://localhost:3000").replace(/\/$/, ""),
+  publicBaseUrl: opt("PUBLIC_BASE_URL", "http://localhost:3000").trim().replace(/\/$/, ""),
+  /** Unset means "derive it from how the app reaches us" (api/origin.ts). */
+  publicBaseUrlSet: Boolean(process.env.PUBLIC_BASE_URL?.trim()),
   deviceToken: req("DEVICE_TOKEN"),
   appApiKey: req("APP_API_KEY"),
 

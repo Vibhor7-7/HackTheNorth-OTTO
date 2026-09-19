@@ -22,7 +22,7 @@ import {
   useOtto,
 } from "../../src/ui";
 import { colors as c } from "../../src/theme";
-import { otto } from "../../src/data/source";
+import { isLive, otto } from "../../src/data/source";
 import {
   CustomMcp,
   loadCustomMcp,
@@ -86,7 +86,7 @@ export default function ConnectionsScreen() {
             onRefresh={async () => {
               setRefreshing(true);
               try {
-                await otto.getHome();
+                await otto.refresh();
               } catch {
                 // Same as Home: offline is shown, not thrown.
               } finally {
@@ -116,7 +116,13 @@ export default function ConnectionsScreen() {
                     {tool.name}
                   </Copy>
                   <Copy style={{ color: c.accent, marginTop: 3 }}>
-                    Sign in to continue your task
+                    {state.connections.some(
+                      (r) =>
+                        r.status === "pending" &&
+                        r.toolkit.toLowerCase() === tool.id,
+                    )
+                      ? "Sign in to continue your task"
+                      : "Sign in so Otto can use it"}
                   </Copy>
                 </View>
               </View>
@@ -169,7 +175,14 @@ export default function ConnectionsScreen() {
                     label="Disconnect"
                     destructive
                     onPress={() => {
-                      void otto.disconnect(tool.id).catch(() => {});
+                      setError("");
+                      void otto.disconnect(tool.id).catch((err: unknown) => {
+                        setError(
+                          err instanceof Error
+                            ? err.message
+                            : "Could not disconnect. Try again.",
+                        );
+                      });
                     }}
                   />
                 </View>
@@ -196,7 +209,9 @@ export default function ConnectionsScreen() {
             <Feather name="arrow-up-right" size={20} color={c.accent} />
           </View>
           <Copy style={{ color: c.muted, marginTop: 10 }}>
-            Tools connect when a task needs them.
+            {isLive && available.length
+              ? "Tools connect when a task needs them. These need an auth config in the Composio dashboard first."
+              : "Tools connect when a task needs them."}
           </Copy>
           {available.length > 0 && (
             <View style={{ flexDirection: "row", gap: 10, marginTop: 18 }}>
@@ -281,7 +296,9 @@ export default function ConnectionsScreen() {
           </Copy>
         )}
         <Copy style={{ color: c.muted, fontSize: 14, marginTop: 18 }}>
-          Demo only. No accounts or MCP servers are connected.
+          {isLive
+            ? "Accounts are held by Composio. Custom MCP servers are saved on this phone only."
+            : "Demo only. No accounts or MCP servers are connected."}
         </Copy>
       </ScrollView>
       <Modal
@@ -394,8 +411,9 @@ export default function ConnectionsScreen() {
                     your approval for sensitive actions.
                   </Copy>
                   <Copy style={{ color: c.muted, marginVertical: 20 }}>
-                    This preview simulates discovery and sign-in. No Composio
-                    requests are sent.
+                    {isLive
+                      ? "Every tool call goes through the approval gate before it runs."
+                      : "This preview simulates discovery and sign-in. No Composio requests are sent."}
                   </Copy>
                   <Button label="Got it" onPress={() => setSheet(null)} />
                 </>

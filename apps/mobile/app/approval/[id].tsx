@@ -16,7 +16,7 @@ import {
   s,
 } from "../../src/ui";
 import { TaskJourney } from "../../src/task-journey";
-import { otto } from "../../src/data/source";
+import { isLive, otto } from "../../src/data/source";
 
 export default function ApprovalScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -217,7 +217,9 @@ export default function ApprovalScreen() {
         >
           {state.network !== "online" && pending
             ? "Reconnect to decide."
-            : "Demo · no real account changes"}
+            : isLive
+              ? "Approving runs this action for real."
+              : "Demo · no real account changes"}
         </Copy>
         {pending ? (
           <View style={{ flexDirection: "row", gap: 12 }}>

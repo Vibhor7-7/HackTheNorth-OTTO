@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import {
   KeyboardAvoidingView,
   Platform,
@@ -12,19 +12,18 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import { Button, Copy, Header, Section, s } from "../src/ui";
+import { Button, Copy, Header, Section, s, useOtto } from "../src/ui";
 import { colors as c } from "../src/theme";
-import { demoProfile, useDemoProfile } from "../src/demo-profile";
+import { isLive, otto } from "../src/data/source";
 import { OttoLogo } from "../src/OttoLogo";
 
 export default function ProfileScreen() {
-  const profile = useDemoProfile();
+  const state = useOtto();
+  const profile = state.profile;
   const [draft, setDraft] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
-  useEffect(() => {
-    void demoProfile.initialize();
-  }, []);
-  const name = draft ?? profile.name;
+  const [error, setError] = useState("");
+  const name = draft ?? profile?.name ?? "";
   return (
     <SafeAreaView style={s.page} edges={["top", "bottom"]}>
       <KeyboardAvoidingView
@@ -46,9 +45,11 @@ export default function ProfileScreen() {
           <View style={[s.card, { alignItems: "center", paddingVertical: 30 }]}>
             <OttoLogo size={64} />
             <Copy style={{ fontSize: 26, fontWeight: "700", marginTop: 18 }}>
-              {profile.name}
+              {profile?.name ?? "…"}
             </Copy>
-            <Copy style={{ color: c.muted, marginTop: 6 }}>Demo account</Copy>
+            <Copy style={{ color: c.muted, marginTop: 6 }}>
+              {isLive ? (profile?.role ?? "Otto account") : "Demo account"}
+            </Copy>
           </View>
           <Section title="Your name" />
           <View style={s.card}>
@@ -74,19 +75,32 @@ export default function ProfileScreen() {
             <Button
               label="Save name"
               disabled={
-                !profile.hydrated ||
-                !name.trim() ||
-                name.trim() === profile.name
+                !profile || !name.trim() || name.trim() === profile.name
               }
               onPress={async () => {
-                await demoProfile.setName(name);
-                setDraft(null);
-                setSaved(true);
-                void Haptics.notificationAsync(
-                  Haptics.NotificationFeedbackType.Success,
-                );
+                setError("");
+                try {
+                  await otto.setProfileName(name);
+                  setDraft(null);
+                  setSaved(true);
+                  void Haptics.notificationAsync(
+                    Haptics.NotificationFeedbackType.Success,
+                  );
+                } catch (err) {
+                  setError(
+                    err instanceof Error ? err.message : "Could not save.",
+                  );
+                }
               }}
             />
+            {!!error && (
+              <Copy
+                accessibilityRole="alert"
+                style={{ color: c.danger, marginTop: 12 }}
+              >
+                {error}
+              </Copy>
+            )}
             {saved && (
               <Copy
                 accessibilityLiveRegion="polite"
@@ -135,8 +149,9 @@ export default function ProfileScreen() {
               marginTop: 24,
             }}
           >
-            Your name is saved on this device. This demo does not create an
-            online account.
+            {isLive
+              ? "Otto uses this name in its voice instructions from the next session on."
+              : "Your name is saved on this device. This demo does not create an online account."}
           </Copy>
         </ScrollView>
       </KeyboardAvoidingView>

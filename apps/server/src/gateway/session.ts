@@ -34,6 +34,8 @@ interface TurnRecord {
   assistant_text: string;
   task_ids: string[];
   tool_calls: string[];
+  /** The row exists in the store (D-31): the first transcript writes it. */
+  created: boolean;
   persisted: boolean;
 }
 
@@ -96,6 +98,7 @@ export class DeviceSession {
       assistant_text: "",
       task_ids: [],
       tool_calls: [],
+      created: false,
       persisted: false,
     };
     this.rt?.clearInput();
@@ -259,7 +262,7 @@ export class DeviceSession {
   // ---- transcription (VG-8) ----------------------------------------------
 
   private onUserTranscript(text: string): void {
-    if (this.turn) this.turn.user_text = text;
+    if (this.turn) { this.turn.user_text = text; this.syncTurn(); }
     else if (this.lastTurnId) updateTurn(this.lastTurnId, { user_text: text });
     this.device.sendControl({ type: "transcript", role: "user", text });
   }
@@ -271,7 +274,7 @@ export class DeviceSession {
     if (responseId && this.suppressedResponses.has(responseId)) return;
     // Only ever written to the open turn. Attributing it to the previous turn
     // would overwrite that turn's reply with a later, unrelated one.
-    if (this.turn) this.turn.assistant_text = text;
+    if (this.turn) { this.turn.assistant_text = text; this.syncTurn(); }
     this.device.sendControl({ type: "transcript", role: "assistant", text });
   }
 
@@ -429,6 +432,29 @@ export class DeviceSession {
 
   private lastTurnId: string | undefined;
 
+  /**
+   * D-31 / APP-6: the Transcript tab shows a turn while it is still happening.
+   * The row is written the moment the first transcript lands (turn.created) and
+   * rewritten as the other side arrives (turn.updated), so the user's words are
+   * on screen while Otto is still speaking. Extraction still waits for
+   * persistTurn: an unfinished turn has nothing to extract from.
+   */
+  private syncTurn(): void {
+    const t = this.turn;
+    if (!t || t.persisted) return;
+    const fields = {
+      user_text: t.user_text,
+      assistant_text: t.assistant_text,
+      task_ids: t.task_ids,
+    };
+    if (!t.created) {
+      t.created = true;
+      createTurn({ id: t.turn_id, started_at: t.started_at, ...fields });
+    } else {
+      updateTurn(t.turn_id, fields);
+    }
+  }
+
   /** DATA-1 and VG-15. Raw audio is never stored. */
   private persistTurn(): void {
     const t = this.turn;
@@ -439,14 +465,17 @@ export class DeviceSession {
     const latency =
       t.ptt_end_at && t.first_audio_byte_at ? t.first_audio_byte_at - t.ptt_end_at : undefined;
 
-    const turn = createTurn({
-      id: t.turn_id,
-      started_at: t.started_at,
+    const fields = {
       user_text: t.user_text,
       assistant_text: t.assistant_text,
       task_ids: t.task_ids,
       latency_ms: latency,
-    });
+    };
+    // A turn that produced no transcript at all (a cancelled response, an
+    // error) still gets its row, so the log and the app agree on what happened.
+    const turn =
+      (t.created ? updateTurn(t.turn_id, { ...fields, ended_at: nowIso() }) : undefined) ??
+      createTurn({ id: t.turn_id, started_at: t.started_at, ...fields });
     this.lastTurnId = turn.id;
 
     // VG-15 / NF-1. This line is how the demo gets debugged.
@@ -490,6 +519,7 @@ export class DeviceSession {
       assistant_text: "",
       task_ids: req.task_id ? [req.task_id] : [],
       tool_calls: [],
+      created: false,
       persisted: false,
     };
     this.setState("thinking");

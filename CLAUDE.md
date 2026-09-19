@@ -25,8 +25,11 @@ pnpm dev             # server on :3000 (REST + SSE + device WS on one port)
 pnpm dev:mobile      # Expo app against the mock (apps/mobile uses npm, not pnpm)
 
 # the app against the real server - use the LAN address, not localhost:
-#   cd apps/mobile && EXPO_PUBLIC_OTTO_URL=http://192.168.1.20:3000 \
-#     EXPO_PUBLIC_OTTO_KEY=dev-app-key npm start
+#   cp apps/mobile/.env.example apps/mobile/.env   # then edit EXPO_PUBLIC_OTTO_URL
+#   cd apps/mobile && npm start
+# (or pass EXPO_PUBLIC_OTTO_URL=http://192.168.1.20:3000 inline). Leave
+# PUBLIC_BASE_URL on the server as localhost: Connect Link callbacks are sent to
+# whatever address the app reached the server on, so the phone can open them.
 pnpm fake-device     # DEV-1: laptop mic speaks the device protocol (needs ffmpeg)
 pnpm typecheck       # every package
 pnpm whatsapp        # WhatsApp setup + smoke test (status|connect|numbers|send|disconnect)

@@ -255,6 +255,14 @@ export class MockOtto implements OttoDataSource {
     this.chatTimer = setTimeout(tick, 200 * this.speed);
   };
   setNetwork = (network: NetworkState) => { this.publish({ network }); };
+  refresh = async () => { /* the simulation has nothing to re-read */ };
+  setProfileName = async (name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) throw new Error('Enter the name you want Otto to use.');
+    if (trimmed.length > 48) throw new Error('Use a name with 48 characters or fewer.');
+    const current = this.state.profile ?? { name: '', timezone: 'America/Toronto', contacts: [] };
+    this.publish({ profile: { ...current, name: trimmed } });
+  };
   reset = async (scenario: DemoScenario = 'default') => { this.stopChat(); this.clearTimers(); this.generation++; this.initializing = undefined; this.state = createFixtures(scenario); this.publish({ hydrated: true }); await this.writes; };
   private clearTimers() { this.timers.forEach(clearTimeout); this.timers.clear(); if (this.expiry) clearTimeout(this.expiry); }
   dispose = () => { this.stopChat(); this.generation++; this.clearTimers(); this.listeners.clear(); this.events.clear(); };

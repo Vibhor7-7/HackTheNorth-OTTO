@@ -5,6 +5,7 @@ import Animated, { FadeIn, ReduceMotion } from "react-native-reanimated";
 import { OttoLogo } from "./OttoLogo";
 import { Button, Copy } from "./ui";
 import { colors as c, motion } from "./theme";
+import { baseUrl, isLive } from "./data/source";
 
 export function LaunchScreen({
   onContinue,
@@ -44,10 +45,11 @@ export function LaunchScreen({
             </>
           ) : onContinue ? (
             <>
-              <Button label="Continue demo" onPress={onContinue} />
+              <Button label={isLive ? "Continue" : "Continue demo"} onPress={onContinue} />
               <Copy style={styles.note}>
-                Explore Otto with sample tasks and approvals. No real actions
-                are sent.
+                {isLive
+                  ? `Connected to ${baseUrl}. Approvals here run real actions.`
+                  : "Explore Otto with sample tasks and approvals. No real actions are sent."}
               </Copy>
             </>
           ) : (

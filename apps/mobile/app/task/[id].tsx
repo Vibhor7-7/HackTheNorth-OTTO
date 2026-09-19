@@ -16,7 +16,7 @@ import {
   useOtto,
 } from "../../src/ui";
 import { colors as c } from "../../src/theme";
-import { otto } from "../../src/data/source";
+import { isLive, otto } from "../../src/data/source";
 import type { Task, TaskStep } from "../../src/data/types";
 import { FactDetails, TaskJourney } from "../../src/task-journey";
 
@@ -169,7 +169,7 @@ export default function TaskDetail() {
             Task not found
           </Copy>
           <Copy style={{ color: c.muted, marginVertical: 18 }}>
-            This demo may have been reset.
+            {isLive ? "It may have been created on another server." : "This demo may have been reset."}
           </Copy>
           <Button
             label="Go to Tasks"
@@ -254,7 +254,7 @@ export default function TaskDetail() {
                     ))}
                 </View>
               )}
-              <Copy style={[styles.meta, { marginTop: 16 }]}>Demo result</Copy>
+              <Copy style={[styles.meta, { marginTop: 16 }]}>{isLive ? "Result" : "Demo result"}</Copy>
             </View>
           )}
           {task.status === "needs_input" && (

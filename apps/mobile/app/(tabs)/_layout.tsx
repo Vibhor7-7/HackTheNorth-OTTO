@@ -6,7 +6,8 @@ export default function TabsLayout() {
   const state = useOtto();
   const count =
     state.approvals.filter((x) => x.status === "pending").length +
-    state.connections.filter((x) => x.status === "pending").length;
+    state.connections.filter((x) => x.status === "pending").length +
+    state.actionItems.filter((x) => x.status === "open").length;
   return (
     <NativeTabs
       tintColor={c.accent}

@@ -8,7 +8,7 @@
 import type {
   ActionItem, Approval, ChatMessage, ChatSession, ConnectionRequest, DemoScenario,
   DemoState, Device, Extension, HomePayload, Memory, NetworkState, OttoDataSource,
-  OttoEvent, Task, TaskStep, Turn,
+  OttoEvent, Profile, Task, TaskStep, Turn,
 } from './types';
 
 /**
@@ -60,6 +60,7 @@ function emptyState(): DemoState {
     chatSessions: [{ id: SINGLE_THREAD_ID, title: 'Otto', messages: [], created_at: new Date().toISOString(), updated_at: new Date().toISOString() }],
     activeChatId: SINGLE_THREAD_ID,
     network: 'offline', streaming: false, hydrated: false,
+    profile: null, demoMode: false,
   };
 }
 
@@ -141,19 +142,24 @@ export class HttpOtto implements OttoDataSource {
 
   async initialize(): Promise<void> {
     try {
-      const [home, turns, memories, extensions, messages, device] = await Promise.all([
+      const [home, turns, memories, extensions, messages, device, profile, health] = await Promise.all([
         this.request<HomePayload>('/api/home'),
         this.request<Turn[]>('/api/turns?limit=50'),
         this.request<Memory[]>('/api/memories'),
         this.request<Extension[]>('/api/extensions'),
         this.request<ChatMessage[]>('/api/chat/messages?limit=50'),
         this.request<Device>('/api/device'),
+        this.request<Profile>('/api/profile'),
+        // Unauthenticated on purpose; it is also the "is this even Otto" probe.
+        this.request<{ demo_mode?: boolean }>('/health').catch(() => ({} as { demo_mode?: boolean })),
       ]);
 
       const steps = await this.loadSteps(home.recent_tasks);
 
       this.publish({
         device,
+        profile,
+        demoMode: Boolean(health.demo_mode),
         tasks: home.recent_tasks,
         approvals: home.approvals,
         connections: home.connections,
@@ -405,6 +411,32 @@ export class HttpOtto implements OttoDataSource {
   private async refreshExtensions() {
     this.publish({ extensions: await this.request<Extension[]>('/api/extensions') });
   }
+
+  /** Pull to refresh: Home, the toolkit list and the device, in one round trip each. */
+  refresh = async () => {
+    const [home, extensions, device] = await Promise.all([
+      this.request<HomePayload>('/api/home'),
+      this.request<Extension[]>('/api/extensions'),
+      this.request<Device>('/api/device'),
+    ]);
+    this.publish({
+      approvals: home.approvals,
+      connections: home.connections,
+      actionItems: home.action_items,
+      tasks: home.recent_tasks,
+      extensions, device,
+      network: 'online',
+    });
+  };
+
+  /** PUT /api/profile (DATA-4). The name reaches the next Realtime session's instructions (VG-10). */
+  setProfileName = async (name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) throw new Error('Enter the name you want Otto to use.');
+    if (trimmed.length > 48) throw new Error('Use a name with 48 characters or fewer.');
+    const profile = await this.request<Profile>('/api/profile', { method: 'PUT', body: JSON.stringify({ name: trimmed }) });
+    this.publish({ profile });
+  };
 
   doAction = async (id: string): Promise<string> => {
     const { task_id } = await this.request<{ task_id: string }>(`/api/action-items/${id}/approve`, { method: 'POST' });

@@ -136,6 +136,7 @@ export default function Home() {
               setRefreshing(true);
               try {
                 setHome(await otto.getHome());
+                await otto.refresh();
               } catch {
                 // Pull-to-refresh against a server that is down is not an error
                 // worth a crash; the banner already says we are offline.

@@ -14,7 +14,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { Button, Copy, Header, NetworkBanner, s, useOtto } from "../src/ui";
 import { colors as c } from "../src/theme";
-import { otto } from "../src/data/source";
+import { isLive, otto } from "../src/data/source";
 import {
   decideApproval,
   sendApprovalReply,
@@ -239,15 +239,15 @@ export default function UrgentScreen() {
                 </View>
               )}
               <Copy style={styles.meta}>
-                Demo decisions only. No external actions are performed.
+                {isLive ? "Approve runs the action for real. Deny cancels it." : "Demo decisions only. No external actions are performed."}
               </Copy>
             </>
           ) : (
             <>
               <View style={s.card}>
-                <Copy style={{ fontWeight: "600" }}>Demo text channel</Copy>
+                <Copy style={{ fontWeight: "600" }}>{isLive ? "Text channel" : "Demo text channel"}</Copy>
                 <Copy style={{ color: c.muted, marginTop: 8 }}>
-                  Simulated messages from Otto. Reply with approve CODE or deny
+                  {isLive ? "Messages from Otto. " : "Simulated messages from Otto. "}Reply with approve CODE or deny
                   CODE. These use the same approvals as the rest of the app.
                 </Copy>
               </View>

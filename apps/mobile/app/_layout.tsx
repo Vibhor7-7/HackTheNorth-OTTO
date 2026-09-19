@@ -6,10 +6,9 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { Appearance } from "react-native";
 import { colors as c } from "../src/theme";
-import { otto } from "../src/data/source";
+import { isLive, otto } from "../src/data/source";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { LaunchScreen } from "../src/LaunchScreen";
-import { demoProfile } from "../src/demo-profile";
 import { ApprovalNotice } from "../src/approval-notice";
 
 export default function RootLayout() {
@@ -17,16 +16,18 @@ export default function RootLayout() {
   const [entered, setEntered] = useState(false);
   const [error, setError] = useState("");
   const initialize = () =>
-    Promise.all([
-      otto.initialize(),
-      demoProfile.initialize(),
-      AsyncStorage.getItem("otto.demo.entered"),
-    ])
-      .then(([, , seen]) => {
+    Promise.all([otto.initialize(), AsyncStorage.getItem("otto.demo.entered")])
+      .then(([, seen]) => {
         setEntered(seen === "yes");
         setReady(true);
       })
-      .catch(() => setError("Your demo could not load. Please try again."));
+      .catch(() =>
+        setError(
+          isLive
+            ? "Otto could not start. Check the server address and try again."
+            : "Your demo could not load. Please try again.",
+        ),
+      );
   useEffect(() => {
     Appearance.setColorScheme("dark");
     void initialize();
@@ -36,7 +37,7 @@ export default function RootLayout() {
       await AsyncStorage.setItem("otto.demo.entered", "yes");
       setEntered(true);
     } catch {
-      setError("Could not save your demo session. Please try again.");
+      setError("Could not save your session. Please try again.");
     }
   };
   return (

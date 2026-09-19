@@ -8,7 +8,8 @@ export function createFixtures(scenario: DemoScenario = 'default', now = Date.no
     // The simulation has no hardware, so it reports a plausible device: the screen
     // then has the same shape whichever provider is in use.
     device: { connected: true, state: 'idle', last_seen: at(0) },
-    hydrated: false, network: 'online', streaming: false, messages: [], activeChatId: 'chat-initial', chatSessions: [{ id: 'chat-initial', title: 'New chat', messages: [], created_at: new Date().toISOString(), updated_at: new Date().toISOString() }],
+    hydrated: false, network: 'online', streaming: false, demoMode: true, messages: [],
+    profile: { name: 'Ayush', timezone: 'America/Toronto', contacts: [] }, activeChatId: 'chat-initial', chatSessions: [{ id: 'chat-initial', title: 'New chat', messages: [], created_at: new Date().toISOString(), updated_at: new Date().toISOString() }],
     tasks: [
       task('task-shopify', 'Put the blue hoodie on sale for 20% off', 'awaiting_approval', ['shopify'], 3),
       { ...task('task-coffee', 'Coffee with Sam next week. Send him the invite.', 'awaiting_connection', ['googlecalendar', 'gmail'], 12), spoken_summary: 'Tuesday at 10 works. Connect Gmail to send Sam the details.' },

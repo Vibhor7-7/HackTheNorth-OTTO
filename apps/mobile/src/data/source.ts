@@ -12,7 +12,7 @@ import { MockOtto } from './mock';
 import { HttpOtto } from './http';
 import type { OttoDataSource } from './types';
 
-const baseUrl = (process.env.EXPO_PUBLIC_OTTO_URL ?? '').replace(/\/$/, '');
+export const baseUrl = (process.env.EXPO_PUBLIC_OTTO_URL ?? '').trim().replace(/\/$/, '');
 const apiKey = process.env.EXPO_PUBLIC_OTTO_KEY ?? 'dev-app-key';
 
 export const isLive = Boolean(baseUrl);

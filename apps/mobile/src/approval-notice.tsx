@@ -14,7 +14,7 @@ import * as Haptics from "expo-haptics";
 import { GlassChrome } from "./glass";
 import { Button, Copy, useOtto } from "./ui";
 import { colors as c } from "./theme";
-import { otto } from "./data/source";
+import { isLive, otto } from "./data/source";
 import { decideApproval, timeRemaining } from "./data/approval-channel";
 
 // A notice is an arrival, not a second persistent approval inbox.
@@ -128,7 +128,7 @@ export function ApprovalNotice() {
               <Copy
                 style={{ fontSize: 14, fontWeight: "600", color: c.accent }}
               >
-                Otto · Demo approval
+                {isLive ? "Otto · Needs you" : "Otto · Demo approval"}
               </Copy>
               <Copy
                 numberOfLines={1}
@@ -174,7 +174,7 @@ export function ApprovalNotice() {
           >
             <View style={styles.heading}>
               <Copy style={{ fontWeight: "600", flex: 1 }}>
-                Otto · Demo approval
+                {isLive ? "Otto · Needs you" : "Otto · Demo approval"}
               </Copy>
               <Pressable
                 accessibilityRole="button"
@@ -206,8 +206,9 @@ export function ApprovalNotice() {
                 ))}
               </View>
               <Copy style={{ color: c.muted, marginTop: 20, fontSize: 14 }}>
-                This action is simulated. No real message, order, or charge is
-                sent.
+                {isLive
+                  ? "Approve and exactly this runs. Deny and nothing happens."
+                  : "This action is simulated. No real message, order, or charge is sent."}
               </Copy>
             </ScrollView>
             <View

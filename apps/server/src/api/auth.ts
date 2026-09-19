@@ -4,6 +4,7 @@
 
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { env } from "../env";
+import { rememberAppOrigin } from "./origin";
 
 const EXEMPT = ["/connect/callback", "/health"];
 
@@ -17,5 +18,7 @@ export function requireAppKey(req: FastifyRequest, reply: FastifyReply, done: ()
     reply.code(401).send({ error: "unauthorized" });
     return;
   }
+  // The app just proved it can reach us at this origin; Connect Links redirect there.
+  rememberAppOrigin(req);
   done();
 }
