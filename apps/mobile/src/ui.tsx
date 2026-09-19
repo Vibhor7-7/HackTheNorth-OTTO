@@ -14,6 +14,9 @@ import { Feather } from "@expo/vector-icons";
 import { colors as c, fonts, motion } from "./theme";
 import { GlassChrome } from "./glass";
 import { otto } from "./data/mock";
+import { router } from "expo-router";
+import { OttoLogo } from "./OttoLogo";
+import { BrandMark } from "./brand-marks";
 
 export function useOtto() {
   return useSyncExternalStore(
@@ -154,13 +157,34 @@ export function Header({
   back?: () => void;
 }) {
   return (
-    <View style={s.header}>
-      {back && <IconButton name="chevron-left" label="Back" onPress={back} />}
-      <Display style={{ fontSize: back ? 23 : 34, flex: 1 }}>{title}</Display>
-      {right}
+    <View style={{ paddingTop: 12, paddingBottom: 22, gap: 22 }}>
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+        }}
+      >
+        <View style={{ width: 46 }}>
+          {back && (
+            <IconButton name="chevron-left" label="Back" onPress={back} />
+          )}
+        </View>
+        <OttoLogo size={36} />
+        <IconButton
+          name="user"
+          label="Profile"
+          onPress={() => router.push("/profile")}
+        />
+      </View>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+        <Display style={{ fontSize: back ? 28 : 34, flex: 1 }}>{title}</Display>
+        {right}
+      </View>
     </View>
   );
 }
+
 export function Section({ title, aside }: { title: string; aside?: string }) {
   return (
     <View style={s.section}>
@@ -183,32 +207,7 @@ export function NetworkBanner() {
   );
 }
 export function ToolMark({ id, size = 38 }: { id: string; size?: number }) {
-  const names: Record<string, React.ComponentProps<typeof Feather>["name"]> = {
-    gmail: "mail",
-    googlecalendar: "calendar",
-    shopify: "shopping-bag",
-    notion: "file-text",
-    slack: "hash",
-    github: "github",
-  };
-  return (
-    <View
-      style={{
-        width: size,
-        height: size,
-        borderRadius: size * 0.3,
-        backgroundColor: c.raised,
-        alignItems: "center",
-        justifyContent: "center",
-      }}
-    >
-      <Feather
-        name={names[id.toLowerCase()] ?? "box"}
-        size={size * 0.48}
-        color={c.accent}
-      />
-    </View>
-  );
+  return <BrandMark id={id} size={size} />;
 }
 export const s = StyleSheet.create({
   copy: { fontFamily: fonts.body, fontSize: 16, lineHeight: 23, color: c.text },

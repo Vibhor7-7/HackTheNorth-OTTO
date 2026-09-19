@@ -41,3 +41,7 @@ app-example
 # generated native folders
 /ios
 /android
+
+# Mobile source data providers are application code
+!src/data/
+!src/data/**

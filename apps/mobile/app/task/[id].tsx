@@ -46,12 +46,17 @@ function Step({ step, last }: { step: TaskStep; last: boolean }) {
     <View style={styles.step}>
       <View style={styles.rail}>
         {!last && <View style={styles.line} />}
-        <View
-          style={[
-            styles.dot,
-            { backgroundColor: step.kind === "error" ? c.danger : c.accent },
-          ]}
-        />
+        <View style={styles.stepNumber}>
+          <Copy
+            style={{
+              fontSize: 12,
+              fontWeight: "700",
+              color: step.kind === "error" ? c.danger : c.accent,
+            }}
+          >
+            {String(step.seq).padStart(2, "0")}
+          </Copy>
+        </View>
       </View>
       <View style={{ flex: 1, paddingBottom: last ? 0 : 26 }}>
         <View style={styles.row}>
@@ -167,22 +172,19 @@ export default function TaskDetail() {
         >
           <Copy style={styles.title}>{task.goal}</Copy>
           <View style={[styles.row, { marginTop: 14, marginBottom: 8 }]}>
-            <View
-              style={[
-                styles.statusDot,
-                {
-                  backgroundColor:
-                    task.status === "failed"
-                      ? c.danger
-                      : task.status === "cancelled"
-                        ? c.muted
-                        : task.status === "succeeded"
-                          ? c.success
-                          : c.warning,
-                },
-              ]}
-            />
-            <Copy style={{ fontWeight: "600" }}>{labels[task.status]}</Copy>
+            <Copy
+              style={{
+                fontWeight: "600",
+                color:
+                  task.status === "failed"
+                    ? c.danger
+                    : task.status === "succeeded"
+                      ? c.accent
+                      : c.text,
+              }}
+            >
+              {labels[task.status]}
+            </Copy>
           </View>
           <Copy style={styles.meta}>
             {task.source === "voice"
@@ -363,7 +365,6 @@ const styles = StyleSheet.create({
     letterSpacing: -0.5,
   },
   row: { flexDirection: "row", alignItems: "center", gap: 8 },
-  statusDot: { width: 7, height: 7, borderRadius: 4 },
   meta: { fontSize: 14, lineHeight: 20, color: c.muted },
   cardTitle: {
     fontSize: 21,
@@ -372,11 +373,17 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   step: { flexDirection: "row", gap: 14 },
-  rail: { width: 12, alignItems: "center" },
-  dot: { width: 8, height: 8, borderRadius: 4, marginTop: 8 },
+  rail: { width: 28, alignItems: "center" },
+  stepNumber: {
+    minHeight: 26,
+    width: 28,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: c.surface,
+  },
   line: {
     position: "absolute",
-    top: 16,
+    top: 30,
     bottom: -8,
     width: 1,
     backgroundColor: c.line,

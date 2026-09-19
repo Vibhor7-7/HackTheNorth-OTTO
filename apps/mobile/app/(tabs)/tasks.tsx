@@ -211,7 +211,9 @@ export default function TasksScreen() {
                       <Copy style={{ fontStyle: "italic", color: c.text }}>
                         “{item.snippet}”
                       </Copy>
-                      <Copy style={{ color: c.muted, fontSize: 14, marginTop: 12 }}>
+                      <Copy
+                        style={{ color: c.muted, fontSize: 14, marginTop: 12 }}
+                      >
                         {Math.round(item.confidence * 100)}% confidence
                       </Copy>
                       <View style={[styles.row, { marginTop: 12 }]}>
