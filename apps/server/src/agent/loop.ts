@@ -192,9 +192,58 @@ function needsClarification(goal: string, contactNames: string[]): boolean {
   );
 }
 
-/** Tool results can be enormous (a calendar list is 50 KB); the model needs the shape, not all of it. */
+/**
+ * Tool results can be enormous - a repo list is 22 KB, a calendar list 50 KB - and
+ * a model cannot be handed all of it. What matters is *how* it gets shortened: a
+ * blind slice cuts the JSON mid-array, and the model then reasons on a partial
+ * list believing it is complete. That is how "which repos do I have" became "that
+ * repo does not exist".
+ *
+ * So keep whole items and say how many were dropped. A model told the list is
+ * partial can paginate or ask; a model handed a truncated string cannot tell.
+ */
+const RESULT_BUDGET = 8000;
+
 function trim(value: unknown): unknown {
-  const json = JSON.stringify(value);
-  if (json && json.length <= 6000) return value;
-  return { truncated: true, preview: json?.slice(0, 6000) };
+  const json = safeJson(value);
+  if (json.length <= RESULT_BUDGET) return value;
+
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+
+    // Find the array carrying the bulk of the payload.
+    let listKey: string | undefined;
+    let longest = 0;
+    for (const [k, v] of Object.entries(record)) {
+      if (Array.isArray(v) && v.length > longest) { longest = v.length; listKey = k; }
+    }
+
+    if (listKey) {
+      const list = record[listKey] as unknown[];
+      const rest = { ...record, [listKey]: [] };
+      let budget = RESULT_BUDGET - safeJson(rest).length - 200;
+      const kept: unknown[] = [];
+      for (const item of list) {
+        const size = safeJson(item).length + 1;
+        if (size > budget) break;
+        budget -= size;
+        kept.push(item);
+      }
+      return {
+        ...rest,
+        [listKey]: kept,
+        _truncated: {
+          returned: kept.length,
+          omitted: list.length - kept.length,
+          note: `This list was shortened to fit. ${list.length - kept.length} of ${list.length} items are not shown, so do not conclude something is absent from it. Narrow the query or ask for a specific page.`,
+        },
+      };
+    }
+  }
+
+  return { _truncated: { note: "Result too large to show in full." }, preview: json.slice(0, RESULT_BUDGET) };
+}
+
+function safeJson(value: unknown): string {
+  try { return JSON.stringify(value) ?? ""; } catch { return ""; }
 }

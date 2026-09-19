@@ -92,6 +92,12 @@ export interface Profile {
   role?: string;
   contacts: { name: string; email?: string; note?: string }[];
   preferences?: string;
+  /**
+   * Handles on other services. Without these the agent guesses from `name` - it
+   * tried owner "Vibhor" for a repo owned by "Vibhor7-7" - and burns a tool call
+   * discovering its own mistake.
+   */
+  handles?: { github?: string };
 }
 
 export type DeviceState = "idle" | "listening" | "thinking" | "speaking" | "error";

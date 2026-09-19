@@ -18,6 +18,10 @@ export const TIER_OVERRIDES: Record<string, RiskTier> = {
   GITHUB_CREATE_AN_ISSUE: "R1",
   GITHUB_UPDATE_AN_ISSUE: "R1",
   GITHUB_ADD_ASSIGNEES_TO_AN_ISSUE: "R1",
+  // Opening a pull request proposes a change; it does not apply one. Closing it
+  // undoes it completely, so it runs without an approval like any other
+  // reversible write. Merging it is the irreversible half, and that stays R2.
+  GITHUB_CREATE_A_PULL_REQUEST: "R1",
   // A comment is posted publicly as the user and cannot be un-said, which is
   // "sends on the user's behalf" and "public change" in 7.6's terms.
   GITHUB_CREATE_AN_ISSUE_COMMENT: "R2",

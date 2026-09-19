@@ -64,6 +64,7 @@ export const DEFAULT_PROFILE: Profile = {
     { name: "Alison", email: "alison@example.com", note: "teammate, task agent owner" },
   ],
   preferences: "Prefers morning meetings. Keeps Fridays free of calls.",
+  handles: { github: "Vibhor7-7" },
 };
 
 export function getProfile(): Profile {

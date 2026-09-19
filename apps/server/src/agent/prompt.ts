@@ -20,6 +20,7 @@ export function systemPrompt(
     "",
     `Today is ${today}. The user is ${profile.name}, timezone ${profile.timezone}.`,
     `Known contacts: ${contacts}.`,
+    profile.handles?.github ? `Their GitHub username is ${profile.handles.github}; use it as the repository owner unless told otherwise.` : "",
     memories.length ? `Notes the user gave you: ${memories.join(" | ")}.` : "",
     "",
     "Rules:",

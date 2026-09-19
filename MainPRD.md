@@ -681,6 +681,13 @@ which is both "sends on the user's behalf" and "public change" in the rules abov
 patterns, so it would otherwise reach R2 only through the unknown-tool default, and
 a pin means it cannot drift to R1 if those patterns change.
 
+`GITHUB_CREATE_A_PULL_REQUEST` is pinned **R1** (D-29): opening a pull request
+proposes a change rather than applying one, and closing it undoes it completely, so
+it runs without holding. Merging is the irreversible half and stays R2. It is
+deliberately **not** R0 - R0 means read-only, and a write sitting in the read-only
+tier would be the one hole in the risk model a judge could find, for no behavioural
+gain since the gate only holds R2.
+
 ---
 
 ## 8. Demo scenarios and acceptance criteria
@@ -868,6 +875,7 @@ See D-12. The honest reason: it would not make the hack easier and it would not 
 | **D-26** | **Discovery picks among the toolkits the user has set up, and loads a curated tool subset per toolkit. Composio's tool search is a best-effort hint only.** | Measured against the live catalogue: `tools.getRawComposioTools({search})` is AND-keyword matching over tool text, not semantic - "free busy calendar" returns exactly the right tools, "free slot week" returns nothing because "week" matches no tool, and a full goal sentence always returns zero. When a search resolves to one toolkit the SDK sends `scopes: null` and the API rejects it, so a search can throw as well as come back empty. `toolkits.get({search})` ignores `search` entirely - the same six toolkits come back for any term. A bare `limit` truncates a toolkit's tools alphabetically, so asking for five Google Calendar tools yields five `*_ACL_*` tools. What is genuinely dynamic, and all AG-7 should claim, is which toolkit gets chosen and the fact that an unconnected one triggers a live Connect Link. |
 | **D-27** | **WhatsApp is cut. Gmail carries S0 and S2 on the agent path; GitHub joins the fast lane, read-only.** 7.4 goes from six tools to eight; CMP-9 from two to four. | WhatsApp is the Meta Business Cloud API: a business account, a registered number, a system-user token, registered test recipients, and a 24-hour window or an approved template before a plain text message will send. That is a lot of setup standing behind one demo beat, and none of it is visible to a judge. Gmail is one OAuth click on the account already in use, sends to anyone, and `GMAIL_SEND_EMAIL` is R2 by rule with no override - so S0's connect beat and S2's approval beat both work with less to go wrong. GitHub on the fast lane adds a second read-only question the voice agent can answer in one breath ("what's assigned to me?"), which shows the fast lane is a general capability rather than a calendar special case. Both GitHub tools take no required arguments, so the voice model cannot get them wrong. |
 | **D-28** | **GitHub moves off the fast lane onto the agent path, with thirteen tools instead of two.** 7.4 returns to six tools, CMP-9 to two. | The fast lane's constraints were what limited GitHub: single call, no required arguments, 2.5 s. That only ever allowed the two account-wide list calls, because everything interesting needs `owner` and `repo` - which the voice model cannot know. On the agent path the loop resolves a repo name first (`LIST_REPOSITORIES_FOR_THE_AUTHENTICATED_USER`) and then acts, so GitHub gains reading issues and pull requests in a named repo, searching, creating and updating issues, assigning people, commenting, and merging. Verified: "how many open issues are assigned to me, and what repos do I have" chained three read calls into one spoken answer, and "merge pull request 1" stopped at an approval card without merging. The cost is that a GitHub question now takes a "on it" plus a follow-up instead of one breath; the calendar keeps the fast lane because that is the question people ask mid-sentence. |
+| **D-29** | **Otto can open pull requests. `GITHUB_CREATE_A_PULL_REQUEST` is R1, not R0.** `GITHUB_LIST_BRANCHES` added so the agent can resolve `head` and `base`. | Asked for as R0. R0 and R1 behave identically - the gate only holds R2 - so R1 delivers the same thing while keeping "R0 = read-only" true, which matters because the app shows the tier on every step and the risk model is the safety story. Opening a PR is reversible by closing it; merging is not, and stays R2. |
 
 ---
 
@@ -963,6 +971,10 @@ Judge check-ins: OpenAI, Composio and Expo booths early, and once more after sta
 
 ## 17. Changelog
 
+- **1.6.1**: Otto can open pull requests (D-29). `GITHUB_CREATE_A_PULL_REQUEST`
+  added to the curated set and pinned R1, with `GITHUB_LIST_BRANCHES` alongside it
+  so `head` and `base` can be resolved rather than guessed. 7.6's override note
+  records why it is R1 and not R0.
 - **1.6.0**: GitHub moves from the fast lane to the agent path and grows from two
   tools to thirteen (D-28). **Section 7 changed:** 7.4 returns to six function
   tools and CMP-9 to two, both GitHub entries removed; VG-17's instruction now

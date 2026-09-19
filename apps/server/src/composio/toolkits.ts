@@ -44,10 +44,14 @@ export const CURATED_TOOLS: Record<string, string[]> = {
     "GITHUB_GET_AN_ISSUE",
     "GITHUB_LIST_PULL_REQUESTS",
     "GITHUB_SEARCH_ISSUES_AND_PULL_REQUESTS",
+    // CREATE_A_PULL_REQUEST needs head and base branch names, so the agent has to
+    // be able to look them up rather than invent them.
+    "GITHUB_LIST_BRANCHES",
     // writing
     "GITHUB_CREATE_AN_ISSUE",            // R1
     "GITHUB_UPDATE_AN_ISSUE",            // R1 - also how an issue gets closed
     "GITHUB_ADD_ASSIGNEES_TO_AN_ISSUE",  // R1
+    "GITHUB_CREATE_A_PULL_REQUEST",      // R1 - proposes a change, merges nothing
     "GITHUB_CREATE_AN_ISSUE_COMMENT",    // R2 - a public utterance in your name
     "GITHUB_MERGE_A_PULL_REQUEST",       // R2 - changes the default branch
   ],
