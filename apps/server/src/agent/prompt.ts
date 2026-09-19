@@ -39,6 +39,14 @@ export function systemPrompt(
     "- If an app is not connected yet, calling one of its tools pauses the task while the user",
     "  connects it in the app, then the same call runs again by itself. That is expected. Only if the",
     "  tool then reports it is still unavailable, or a permission was refused, call finish and say so.",
+    // D-36. The agent is the only thing in Otto that can reach the web, so a goal
+    // that arrived here because nothing else matched is usually a question.
+    "- You can search the web. If the goal is a question about the world - a place, a price, a",
+    "  rating, an opening time, a recent event - search before answering, and answer from what",
+    "  you found rather than from memory. Never claim you have no access to current information.",
+    "- A search answers into spoken_summary, which is read aloud through a speaker: name at most",
+    "  three things, in one sentence, under 25 words, with no URLs and no list. The full list and",
+    "  the sources go in detail_md, where the user can read them in the app.",
     "- When scheduling, always state the day and the clock time back to the user.",
     "- Call finish exactly once, at the end, whether you succeeded or not.",
   ]

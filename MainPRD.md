@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | Event | Hack the North 2026 |
-| Spec version | 1.11.0 (supersedes 1.10.0) |
+| Spec version | 1.12.0 (supersedes 1.11.0) |
 | Product name | **Otto.** The device, the agent, and the app are all Otto. Use the name in the system prompt, the app, and the pitch. |
 | Status | **Final for build.** Open decisions in Section 13 only. |
 | Tracks | OpenAI API Prizes, Composio, Expo (primary). Rox (natural fit, no extra work). Shopify: cut (D-25). Elastic: cut (D-12). |
@@ -710,6 +710,15 @@ which is both "sends on the user's behalf" and "public change" in the rules abov
 patterns, so it would otherwise reach R2 only through the unknown-tool default, and
 a pin means it cannot drift to R1 if those patterns change.
 
+**Web search (D-36).** `COMPOSIO_SEARCH_WEB`, `COMPOSIO_SEARCH_NEWS` and
+`COMPOSIO_SEARCH_FETCH_URL_CONTENT` are pinned **R0**: reading the public web changes
+nothing and sends nothing. They are pinned rather than left to the patterns because
+`COMPOSIO_SEARCH_WEB` would otherwise reach R0 only through the `SEARCH` in its
+toolkit prefix, which is a coincidence of naming rather than a rule. Note also that
+`composio_search` is the first toolkit slug containing an underscore, so `toolkitOf()`
+can no longer split on the first one - it checks a short compound list first, or every
+search step would be logged against a toolkit called "composio" that does not exist.
+
 **Development escape hatch.** `DEV_TIER_OVERRIDES` (5.2) forces a tier from the
 environment, so an R2 action can be iterated on without tapping approve every time.
 It wins over every rule above, including the argument override, because that is its
@@ -926,6 +935,7 @@ See D-12. The honest reason: it would not make the hack easier and it would not 
 | **D-34** | **Toolkits are added from the app, not the dashboard.** `GET /api/catalog` serves Composio's catalogue; `POST /api/extensions/:id/connect` creates a Composio-managed auth config on demand before making the Connect Link; no-auth toolkits are enabled in a local table. | Every "add a tool" path used to end at platform.composio.dev, which is the wrong surface for a phone. Verified against @composio/core 0.18.1: `toolkits.get` returns ~1,550 toolkits in under a second (no server-side search, page cursor is a page number), `authConfigs.create(slug, { type: "use_composio_managed_auth" })` needs nothing from the user for the 48% of top toolkits Composio manages, and refuses a config for no-auth toolkits ("does not require authentication"), so those are recorded in `enabled_toolkits` and offered to discovery from there. Custom-auth toolkits (API keys) still need the dashboard once: taking keys through this server is a scope the demo does not need. Everything an added toolkit does still passes the gate; uncurated tools tier by the 7.6 rules, unknown ones to R2. |
 | **D-33** | **An in-app "skip all approvals" override, in memory only.** `PUT /api/settings`, `settings.updated`, a Settings switch and a banner on every tab. | Asked for so a run can go end to end without tapping. It is the opposite of the product's thesis (AP-1, D-3), so the design makes it impossible to forget: it resets on server restart, every auto-approved call is logged at WARN, and the app shows an undismissable red banner on every tab while it is on. The Approval record and the `approval_wait` step are still written, worded "auto-approved", so Task detail never implies a human confirmed. It was not made persistent for the same reason `DEV_TIER_OVERRIDES` is env-only: a forgotten switch removes S0's second beat and all of S2. Must be off for any rehearsal or demo. |
 | **D-32** | **A seventh Realtime tool, `list_capabilities`, tells the voice model what Otto can and cannot do right now.** 7.4 goes to seven tools. | The model was guessing at its own reach in both directions: promising things no connected toolkit could do, and declining things it could. The honest answer depends on which Composio accounts are ACTIVE at that moment, which only the server knows. Baking the list into the instructions at session start was considered and rejected because a toolkit connected mid-session (S0's whole point) would not be reflected until the next session. The tool reads a cache that the gateway warms at session open and refreshes on every `extension.updated`, so the voice path still performs no retrieval (VG-10) and the call costs one function round trip only when the model chooses it. The phrases come mechanically from the curated tool slugs, so the list cannot claim more than the agent has loaded. |
+| **D-36** | **Otto can search the open web, through the task agent.** `composio_search` is a curated toolkit (`COMPOSIO_SEARCH_WEB`, `_NEWS`, `_FETCH_URL_CONTENT`), all three pinned **R0**, and it is always on rather than something the user adds. Discovery falls back to it when nothing else matches the goal. | Otto could answer when the war ended and not what the best restaurants in Waterloo are, and said so out loud - the one failure a judge will reach for. Measured before the change: "find the best restaurants in Waterloo, Canada" handed the agent **LinkedIn and GitHub**, because a factual goal names no app and every curated toolkit sits on the same floor score. The fallback fixes the routing; the toolkit fixes the capability. Verified against the live account: `composio_search` is `noAuth`, and `COMPOSIO_SEARCH_WEB` executed with no connected account, returning `{ answer, citations[] }` - a narrative paragraph plus sources, which is close to speakable as-is. Always-on rather than a row in `enabled_toolkits` because a deleted row would put Otto back to refusing; `disableToolkit` is deliberately a no-op for it. It stays off the fast lane (CMP-9): search measured 1.6-1.8 s against a 2.5 s budget, too close to risk, and VG-7 already speaks the answer when the task lands. Three tools of twenty-one: the toolkit also carries Amazon, Walmart, flights and hotels, which no spoken question needs. |
 
 ---
 
@@ -1021,6 +1031,13 @@ Judge check-ins: OpenAI, Composio and Expo booths early, and once more after sta
 
 ## 17. Changelog
 
+- **1.12.0**: Otto can search the web (D-36). `composio_search` joins the curated
+  toolkits, always on and needing no account; discovery falls back to it when
+  nothing else matches, which is what "best restaurants in Waterloo" needed. The
+  three search tools are pinned R0 in 7.6 and `toolkitOf()` learns about compound
+  toolkit slugs. The 7.5 instructions template stops the voice model declining a
+  question it can now answer. **Section 7 changed** only by the 7.6 note and that
+  sentence.
 - **1.9.6**: CMP-4 finished: a task that raised a Connect Link resumes and retries
   its call when the user signs in (D-35). Discovery admits catalogue toolkits the
   goal names. The 7.5 instructions template tells the voice model that connecting

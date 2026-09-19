@@ -13,6 +13,15 @@
 
 /** Tools loaded into the agent loop for a toolkit we know the demo needs. */
 export const CURATED_TOOLS: Record<string, string[]> = {
+  // D-36. The web, as a toolkit. No auth: Composio hosts the search, so this one
+  // is available from a cold start and can never be in the S0 "needs connecting"
+  // state. Three tools and no more - the toolkit also carries Amazon, Walmart,
+  // flights and hotels, none of which a spoken question needs.
+  composio_search: [
+    "COMPOSIO_SEARCH_WEB",               // Exa-backed; returns { answer, citations }
+    "COMPOSIO_SEARCH_NEWS",              // recency-filtered, for "what happened with"
+    "COMPOSIO_SEARCH_FETCH_URL_CONTENT", // read one page the search turned up
+  ],
   googlecalendar: [
     "GOOGLECALENDAR_GET_CURRENT_DATE_TIME",   // anchors "next week" to a real date
     "GOOGLECALENDAR_FIND_FREE_SLOTS",
