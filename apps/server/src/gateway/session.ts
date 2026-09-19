@@ -339,9 +339,12 @@ export class DeviceSession {
     const timeout = new Promise<"timeout">((resolve) =>
       setTimeout(() => resolve("timeout"), FAST_LANE_TIMEOUT_MS));
 
-    // The model supplies intent; defaultArgs supply the pagination and scoping it
-    // should not have to guess.
-    const args = { ...(tool.defaultArgs ?? {}), ...(call.args as Record<string, unknown>) };
+    // The model speaks Section 7.4; the tool speaks Composio. Translate, because
+    // Composio silently ignores parameters it does not recognise and answers the
+    // wrong question rather than erroring.
+    const args = tool.mapArgs((call.args ?? {}) as Record<string, unknown>, {
+      timezone: getProfile().timezone,
+    });
 
     const outcome = await Promise.race([
       gate({ task_id, slug: tool.slug, args, fast_lane: true }),

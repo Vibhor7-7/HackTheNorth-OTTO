@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | Event | Hack the North 2026 |
-| Spec version | 1.7.1 (supersedes 1.7.0) |
+| Spec version | 1.7.2 (supersedes 1.7.1) |
 | Product name | **Otto.** The device, the agent, and the app are all Otto. Use the name in the system prompt, the app, and the pitch. |
 | Status | **Final for build.** Open decisions in Section 13 only. |
 | Tracks | OpenAI API Prizes, Composio, Expo (primary). Rox (natural fit, no extra work). Shopify: cut (D-25). Elastic: cut (D-12). |
@@ -283,7 +283,7 @@ Replaces the former MCP-1 to MCP-5 (D-10). Composio provides three things and we
 | CMP-6 | P1 | Extensions screen data: list Composio toolkits with connection status for the user (connected / needs_auth / suggested) so APP-4 has real data. |
 | CMP-7 | P1 | Cache discovery results per goal string for the session so repeated demo runs do not pay the search cost twice. |
 | CMP-8 | P0 | Verify exact SDK method names for search, connect-link creation, and execution against docs.composio.dev before coding CMP-1, CMP-3, CMP-4. Tool Router is beta; pin the package version and do not rely on undocumented behaviour. |
-| CMP-9 | P0 | **Fast-lane allowlist.** `composio/fastlane.ts` exports exactly two Composio tools for the voice agent: Google Calendar free/busy and Google Calendar list events for a date. Both are R0. Each carries `defaultArgs` so the model never supplies pagination, and a `shape` that projects the result down to what a spoken answer needs. Nothing else is added to this file without a Decision (D-28 removed GitHub from it). Measure each against Composio on the demo network; if p95 is over 2 s, remove it from the allowlist and the voice agent falls back to `run_task` for calendar questions with no other change. |
+| CMP-9 | P0 | **Fast-lane allowlist.** `composio/fastlane.ts` exports exactly two Composio tools for the voice agent: Google Calendar free/busy and Google Calendar list events for a date. Both are R0. Each carries a **required `mapArgs`** that translates the 7.4 argument names into the parameters the Composio tool actually accepts, and a `shape` that projects the result down to what a spoken answer needs. `mapArgs` is not optional: Composio **silently ignores** unrecognised parameters, so a mismatch produces a confident answer to a different question rather than an error. Nothing else is added to this file without a Decision (D-28 removed GitHub from it). Measure each against Composio on the demo network; if p95 is over 2 s, remove it from the allowlist and the voice agent falls back to `run_task` for calendar questions with no other change. |
 
 **Why not let Composio's Tool Router meta-tool run the whole loop.** Tool Router's native meta-tool bundles search, auth, and execute into one call. That is elegant and it would bypass AP-1. We use Composio for the three capabilities separately so the approval gate sits between LLM choice and execution. If the SDK does not expose them separately, use Composio's before-execute modifier as the gate point instead. Either way AG-3 holds.
 
@@ -981,6 +981,14 @@ Judge check-ins: OpenAI, Composio and Expo booths early, and once more after sta
 
 ## 17. Changelog
 
+- **1.7.2**: Fixed both fast-lane tools, which were answering the wrong question.
+  The 7.4 argument names were never mapped to the parameters the Composio tools
+  accept, and Composio ignores unrecognised parameters silently:
+  `calendar_list_events` sent `date` where the tool wants `timeMin`/`timeMax` (and
+  `calendar_id` where it wants `calendarId`), so it returned the ten oldest events
+  in the calendar; `calendar_free_busy` sent `start`/`end` where the tool wants
+  `time_min`/`time_max`, so it answered about today whatever it was asked. CMP-9
+  now requires a `mapArgs` per tool.
 - **1.7.1**: `DEV_TIER_OVERRIDES` added to 5.2 and 7.6 - a development-only switch
   that forces risk tiers so an R2 action can be iterated on without approving it
   each time. Deliberately an environment variable rather than an edit to

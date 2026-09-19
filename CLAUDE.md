@@ -70,6 +70,10 @@ htn-voice/         Friday spike, reference only - not wired into the build
   tools that cannot work and silently skips S0's Connect Link beat.
 - **There is no SMS channel** (D-24). The app is the only confirmation surface, so
   never add a second one without a Decision.
+- **Composio silently ignores parameters it does not recognise.** It does not error;
+  it answers a different question. Every tool's argument names come from its own
+  schema (`getRawComposioToolBySlug`), never from the name we gave the voice model -
+  that is what `mapArgs` in `composio/fastlane.ts` exists for.
 - **An R2 approval suspends the agent loop in place** (AP-4, D-30). Never rebuild a
   held call from its TaskStep: those arguments are redacted, and AP-5 promises the
   user that exactly what they saw is what runs.
