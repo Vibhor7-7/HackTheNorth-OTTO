@@ -10,6 +10,7 @@ import { Pacer } from "./pacer";
 import { buildInstructions } from "./instructions";
 import { gate } from "../approvals/gate";
 import { FAST_LANE, fastLaneAvailable } from "../composio/fastlane";
+import { capabilitySummary, refreshCapabilities } from "../composio/capabilities";
 import { answerQuestion, cancelTask, runTask, startFastLaneTask, taskStatus } from "../agent";
 import { registerSpeaker, type SpeakRequest } from "../agent/notify";
 import { createTurn, getProfile, listMemories, recentTurnsForReseed, updateTurn } from "../store";
@@ -157,6 +158,9 @@ export class DeviceSession {
     const profile = getProfile();
     const notes = listMemories("user").map((m) => m.text);
     const recent = recentTurnsForReseed(3);
+    // D-32: warm the capability cache alongside the session handshake, off the
+    // turn. list_capabilities reads it synchronously.
+    void refreshCapabilities();
 
     const rt = new RealtimeSession(buildInstructions(profile, notes, recent), {
       onResponseCreated: (id) => this.onResponseCreated(id),
@@ -315,6 +319,8 @@ export class DeviceSession {
         const args = rawArgs as CancelTaskArgs;
         return cancelTask(args.task_id);
       }
+      case "list_capabilities":
+        return capabilitySummary();
       default:
         return { error: `unknown tool ${name}` };
     }

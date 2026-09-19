@@ -91,7 +91,7 @@ export class RealtimeSession {
     log.info("session open", { model: env.realtimeModel, tools: this.tools().length });
   }
 
-  /** VG-6 / VG-16. Six tools total, or four while the fast lane is cut (CMP-9). */
+  /** VG-6 / VG-16 / D-32. Seven tools total, or five while the fast lane is cut (CMP-9). */
   private tools(): RealtimeFunctionTool[] {
     return fastLaneAvailable() ? [...CONTROL_TOOLS, ...FAST_LANE_TOOLS] : [...CONTROL_TOOLS];
   }

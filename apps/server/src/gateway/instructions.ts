@@ -24,6 +24,11 @@ export function buildInstructions(profile: Profile, userMemories: string[], rece
   // D-24: the app is the only confirmation surface, so there is only one
   // sentence Otto can honestly say here.
   lines.push('If the user asks to confirm something, say "check the app to confirm."');
+  // D-32: the model must not guess at its own reach in either direction.
+  lines.push(
+    "If the user asks what you can do, or before you say you cannot do something,",
+    "call list_capabilities and answer from it.",
+  );
 
   // VG-17: exactly these two sentences, and only while the lane exists (CMP-9).
   if (fastLaneAvailable()) {

@@ -593,6 +593,7 @@ run_task        { goal: string, context?: string }     -> { task_id, status: "st
 answer_question { task_id: string, answer: string }    -> { ok: true }
 get_task_status { task_id?: string }                   -> { status, spoken_summary? }
 cancel_task     { task_id?: string }                   -> { ok: true }
+list_capabilities {}                                   -> { connected: [{toolkit, actions}], needs_connection, answers_directly, cannot, stale }   (D-32)
 ```
 
 Fast-lane tools (VG-16, CMP-9; executed by the gateway through the gate, 2.5 s timeout):
@@ -602,8 +603,10 @@ calendar_free_busy   { start: string, end: string }        -> { busy: [{start, e
 calendar_list_events { date: string }                      -> { events: [{title, start, end, attendees}] } | { status: "deferred" }
 ```
 
-**Six tools total** (D-28). The voice model answers calendar questions itself and
-delegates everything else, including all of GitHub. **It never writes.** Fast-lane
+**Seven tools total** (D-28, D-32). The voice model answers calendar questions itself and
+delegates everything else, including all of GitHub. **It never writes.**
+`list_capabilities` is served from a cache the gateway refreshes at session start and
+on every `extension.updated`, so it is synchronous: no retrieval on the voice path (VG-10). Fast-lane
 results are projected down to the fields a spoken answer needs before they go back
 to the model, so it never has 50 KB of JSON in front of it.
 
@@ -646,6 +649,8 @@ and say "On it" or similar. Do not describe what you will do. Do not claim anyth
 is done until you are told it is done.
 If something is ambiguous (which Sam, which date), ask one short question.
 If the user asks to confirm something, say "check the app to confirm."
+If the user asks what you can do, or before you say you cannot do something,
+call list_capabilities and answer from it.
 User profile: {name}, timezone {tz}. Frequent contacts: {contacts}.
 Notes the user gave you: {user_memories}.
 ```
@@ -888,6 +893,7 @@ See D-12. The honest reason: it would not make the hack easier and it would not 
 | **D-29** | **Otto can open pull requests. `GITHUB_CREATE_A_PULL_REQUEST` is R1, not R0.** `GITHUB_LIST_BRANCHES` added so the agent can resolve `head` and `base`. | Asked for as R0. R0 and R1 behave identically - the gate only holds R2 - so R1 delivers the same thing while keeping "R0 = read-only" true, which matters because the app shows the tier on every step and the risk model is the safety story. Opening a PR is reversible by closing it; merging is not, and stays R2. |
 | **D-30** | **An approval suspends the agent loop in place; it is not replayed from the log.** | The held call's arguments are only stored redacted in the TaskStep (DATA-3), so rebuilding the call from the log could send something subtly different from what the user approved - exactly the thing AP-5 exists to prevent. Suspending keeps the real arguments in the closure that hashed them. The cost, stated plainly: a suspended loop lives in memory, so restarting the server with an approval outstanding leaves that task at `awaiting_approval` for good. Acceptable because approvals expire in five minutes and a stuck task is visible on Home rather than silent. Time spent waiting for a human is excluded from the agent's own 3-minute budget, or a task approved after four minutes would die the instant it was allowed to proceed. |
 | **D-31** | **Only a voice-started Task speaks through the device. VG-7 gets the `source` condition it always implied.** | This was never specified either way. VG-7 was written in 1.0, when voice was the only way a Task could exist, so "when a task completes" meant "when a voice task completes" - there was no other kind. CHAT-4 arrived in 1.1 and said where a chat-started Task reports: *"Otto replies 'on it' and the Task appears on Home"*. Nobody re-read VG-7 against it, so chat-started Tasks spoke as well, which no requirement ever asked for and CHAT-4 and D-22 both point away from. Left alone it also bites on stage: queued speech only drains on the next voice turn, so a Task started by text while rehearsing surfaces mid-sentence during the live voice demo. Otto answers where it was asked - app for chat and action items, earpiece for voice. Cost, stated plainly: ask by text while wearing the device and you look at your phone for the answer, which is what the reply already tells you to do. |
+| **D-32** | **A seventh Realtime tool, `list_capabilities`, tells the voice model what Otto can and cannot do right now.** 7.4 goes to seven tools. | The model was guessing at its own reach in both directions: promising things no connected toolkit could do, and declining things it could. The honest answer depends on which Composio accounts are ACTIVE at that moment, which only the server knows. Baking the list into the instructions at session start was considered and rejected because a toolkit connected mid-session (S0's whole point) would not be reflected until the next session. The tool reads a cache that the gateway warms at session open and refreshes on every `extension.updated`, so the voice path still performs no retrieval (VG-10) and the call costs one function round trip only when the model chooses it. The phrases come mechanically from the curated tool slugs, so the list cannot claim more than the agent has loaded. |
 
 ---
 
@@ -983,6 +989,11 @@ Judge check-ins: OpenAI, Composio and Expo booths early, and once more after sta
 
 ## 17. Changelog
 
+- **1.9.2**: **Section 7 changed:** `list_capabilities` added as the seventh
+  Realtime tool (7.4, D-32) and one sentence added to the 7.5 instructions
+  template telling the model to call it before claiming or denying a capability.
+  Served from a cache refreshed at session start and on `extension.updated`;
+  no retrieval on the voice path.
 - **1.9.1**: The Chat tab stopped answering for services it cannot see. Asked
   "what's on my calendar today", the context agent read an empty store and replied
   "no events scheduled" - a confident claim about a calendar CHAT-6 forbids it from

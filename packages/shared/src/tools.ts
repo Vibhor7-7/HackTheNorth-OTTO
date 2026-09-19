@@ -1,4 +1,4 @@
-// Section 7.4 function tools on the Realtime session. Six tools total (D-28).
+// Section 7.4 function tools on the Realtime session. Seven tools total (D-28, D-32).
 // All are executed by the gateway, never by the model and never by Composio
 // directly, so nothing bypasses the approval gate (AG-3, D-11, D-23).
 
@@ -23,6 +23,16 @@ export interface AnswerQuestionArgs { task_id?: string; answer: string }
 export interface GetTaskStatusArgs { task_id?: string }
 export interface GetTaskStatusResult { status: string; spoken_summary?: string }
 export interface CancelTaskArgs { task_id?: string }
+
+/** D-32: what Otto can do right now. Served from a cache, never fetched in the turn. */
+export interface ListCapabilitiesResult {
+  connected: { toolkit: string; actions: string[] }[];
+  needs_connection: string[];
+  answers_directly: string[];
+  cannot: string[];
+  /** True until the first Composio read has completed for this process. */
+  stale: boolean;
+}
 
 // ---- fast-lane tools (VG-16, CMP-9) -------------------------------------
 
@@ -93,6 +103,15 @@ export const CONTROL_TOOLS: RealtimeFunctionTool[] = [
       required: [],
       additionalProperties: false,
     },
+  },
+  {
+    type: "function",
+    name: "list_capabilities",
+    description:
+      "What Otto can do right now: which apps are connected and what each can do, which apps " +
+      "still need connecting, and what Otto cannot do. Call it when the user asks what you can " +
+      "do, or before saying you cannot do something. Summarise in one or two spoken sentences.",
+    parameters: { type: "object", properties: {}, required: [], additionalProperties: false },
   },
 ];
 
