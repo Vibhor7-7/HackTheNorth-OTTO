@@ -1,0 +1,26 @@
+{
+  "name": "otto",
+  "private": true,
+  "version": "1.2.0",
+  "packageManager": "pnpm@10.28.2",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @otto/server dev",
+    "dev:mobile": "pnpm --filter @otto/mobile start",
+    "fake-device": "pnpm --filter @otto/fake-device start",
+    "typecheck": "pnpm -r --no-bail typecheck",
+    "smoke": "pnpm --filter @otto/fake-device smoke"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "better-sqlite3",
+      "esbuild"
+    ]
+  }
+}
