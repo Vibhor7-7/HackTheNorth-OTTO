@@ -7,7 +7,7 @@ import { colors as c } from '../../src/theme';
 import { Copy, Display, Eyebrow, Button, Reveal, useOtto, s } from '../../src/ui';
 import { otto } from '../../src/data/mock';
 export default function ApprovalScreen() {
- const {id}=useLocalSearchParams<{id:string}>(); const state=useOtto(); const approval=state.approvals.find(a=>a.id===id); const [now,setNow]=useState(Date.now());
+ const {id}=useLocalSearchParams<{id:string}>(); const state=useOtto(); const approval=state.approvals.find(a=>a.id===id); const [now,setNow]=useState(()=>Date.now());
  useEffect(()=>{const timer=setInterval(()=>setNow(Date.now()),1000);return()=>clearInterval(timer);},[]);
  if(!approval)return <SafeAreaView style={s.page}><View style={s.content}><Display>Decision unavailable</Display><Button label="Back to Home" onPress={()=>router.replace('/(tabs)/home')}/></View></SafeAreaView>;
  const remaining=Math.max(0,Math.ceil((Date.parse(approval.expires_at)-now)/1000));const pending=approval.status==='pending'&&remaining>0;

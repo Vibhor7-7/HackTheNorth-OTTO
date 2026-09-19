@@ -15,7 +15,7 @@ export default function RootLayout() {
   const [ready, setReady] = useState(false);
   const [error, setError] = useState('');
   const initialize = () => { setError(''); otto.initialize().then(() => setReady(true)).catch(() => setError('Your demo could not load. Please try again.')); };
-  useEffect(initialize, []);
+  useEffect(() => { otto.initialize().then(() => setReady(true)).catch(() => setError('Your demo could not load. Please try again.')); }, []);
   if (fontError) throw fontError;
   return <GestureHandlerRootView style={{ flex: 1, backgroundColor: c.bone }}><SafeAreaProvider>
     <StatusBar style="dark" />

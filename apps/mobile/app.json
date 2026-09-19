@@ -6,11 +6,17 @@
     "orientation": "portrait",
     "scheme": "otto",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
     "ios": {
       "supportsTablet": true
     },
-    "plugins": ["expo-router"],
+    "plugins": [
+      "expo-router",
+      "expo-font",
+      "expo-image",
+      "expo-splash-screen",
+      "expo-status-bar",
+      "expo-web-browser"
+    ],
     "experiments": {
       "typedRoutes": true
     }
