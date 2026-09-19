@@ -10,13 +10,14 @@ export interface Turn { id: string; user_text: string; assistant_text: string; t
 export interface ActionItem { id: string; turn_id: string; title: string; suggested_goal: string; toolkit_hint?: string; confidence: number; snippet: string; status: 'open' | 'approved' | 'dismissed' | 'done'; task_id?: string; created_at: string; decided_at?: string }
 export interface Memory { id: string; text: string; source: 'user' | 'task_summary'; task_id?: string; created_at: string }
 export interface ChatMessage { id: string; role: 'user' | 'assistant'; text: string; citations?: { kind: 'turn' | 'task'; id: string }[]; created_at: string }
+export interface ChatSession { id: string; title: string; messages: ChatMessage[]; created_at: string; updated_at: string }
 export interface HomePayload { approvals: Approval[]; connections: ConnectionRequest[]; action_items: ActionItem[]; recent_tasks: Task[] }
 export interface Device { connected: boolean; state: string; last_seen: string; battery?: number }
 type EventMap = { 'task.created': Task; 'task.updated': Task; 'step.created': TaskStep; 'approval.created': Approval; 'approval.updated': Approval; 'connection.created': ConnectionRequest; 'connection.updated': ConnectionRequest; 'action_item.created': ActionItem; 'action_item.updated': ActionItem; 'memory.created': Memory; 'device.updated': Device; 'extension.updated': Extension };
 export type OttoEvent = { [K in keyof EventMap]: { type: K; data: EventMap[K] } }[keyof EventMap];
 export type NetworkState = 'online' | 'offline' | 'reconnecting';
 export type DemoScenario = 'default' | 'coffee' | 'food' | 'empty' | 'expired' | 'failure';
-export interface DemoState { tasks: Task[]; steps: TaskStep[]; approvals: Approval[]; connections: ConnectionRequest[]; actionItems: ActionItem[]; turns: Turn[]; memories: Memory[]; extensions: Extension[]; messages: ChatMessage[]; network: NetworkState; streaming: boolean; hydrated: boolean }
+export interface DemoState { tasks: Task[]; steps: TaskStep[]; approvals: Approval[]; connections: ConnectionRequest[]; actionItems: ActionItem[]; turns: Turn[]; memories: Memory[]; extensions: Extension[]; messages: ChatMessage[]; chatSessions: ChatSession[]; activeChatId: string; network: NetworkState; streaming: boolean; hydrated: boolean }
 export interface OttoDataSource {
   getSnapshot(): DemoState;
   subscribe(listener: () => void): () => void;
@@ -28,6 +29,7 @@ export interface OttoDataSource {
   doAction(id: string): Promise<string>; dismissAction(id: string): Promise<void>;
   addMemory(text: string): Promise<void>; deleteMemory(id: string): Promise<void>;
   sendChat(text: string): Promise<void>;
+  newChat(): Promise<void>; selectChat(id: string): Promise<void>; clearChat(): Promise<void>; stopChat(): void;
   reset(scenario?: DemoScenario): Promise<void>;
   setNetwork(network: NetworkState): void;
   answerQuestion(taskId: string, answer: string): Promise<void>;

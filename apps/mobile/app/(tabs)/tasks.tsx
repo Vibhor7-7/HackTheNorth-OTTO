@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React from "react";
 import {
   Platform,
   Pressable,
@@ -8,11 +8,12 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import SegmentedControl from "@react-native-segmented-control/segmented-control";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import {
   Button,
+  Section,
   Copy,
   Header,
   NetworkBanner,
@@ -38,7 +39,19 @@ const openTask = (id: string) =>
 
 export default function TasksScreen() {
   const state = useOtto();
-  const [selected, setSelected] = useState(0);
+  const params = useLocalSearchParams<{
+    filter?: string;
+    date?: string;
+    outcome?: string;
+  }>();
+  const selected =
+    params.filter === "running" ? 1 : params.filter === "history" ? 2 : 0;
+  const setSelected = (index: number) =>
+    router.setParams({
+      filter: ["queue", "running", "history"][index],
+      date: "",
+      outcome: "",
+    });
   const approvals = state.approvals.filter((a) => a.status === "pending");
   const connections = state.connections.filter((a) => a.status === "pending");
   const items = state.actionItems.filter((a) => a.status === "open");
@@ -46,13 +59,18 @@ export default function TasksScreen() {
   const running = state.tasks.filter((t) => t.status === "running");
   const done = state.tasks
     .filter((t) => ["succeeded", "failed", "cancelled"].includes(t.status))
+    .filter(
+      (t) =>
+        !params.date || new Date(t.updated_at).toDateString() === params.date,
+    )
+    .filter((t) => !params.outcome || t.status === params.outcome)
     .sort((a, b) => b.updated_at.localeCompare(a.updated_at));
   const counts = [
     approvals.length + connections.length + items.length + questions.length,
     running.length,
     done.length,
   ];
-  const filters = ["Needs you", "Running", "Done"];
+  const filters = ["To do", "Running", "History"];
   return (
     <SafeAreaView style={s.page} edges={["top"]}>
       <NetworkBanner />
@@ -102,9 +120,22 @@ export default function TasksScreen() {
             ))}
           </View>
         )}
+        {!!params.date && (
+          <View style={{ marginBottom: 16 }}>
+            <Copy style={{ marginBottom: 8 }}>{params.date}</Copy>
+            <Button
+              quiet
+              label="Show all history"
+              onPress={() => router.setParams({ date: "", outcome: "" })}
+            />
+          </View>
+        )}
         <View style={{ gap: 14 }}>
           {selected === 0 && (
             <>
+              {!!(approvals.length + connections.length + questions.length) && (
+                <Section title="Decisions" />
+              )}
               {approvals.map((approval) => (
                 <View
                   key={approval.id}
@@ -192,6 +223,7 @@ export default function TasksScreen() {
                   <Copy style={{ marginTop: 12 }}>{task.goal}</Copy>
                 </Pressable>
               ))}
+              {!!items.length && <Section title="Suggestions" />}
               {items.map((item) => {
                 const turn = state.turns.find((t) => t.id === item.turn_id);
                 return (

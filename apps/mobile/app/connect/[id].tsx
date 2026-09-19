@@ -27,9 +27,12 @@ export default function ConnectScreen() {
       e.name.toLowerCase() === id.toLowerCase(),
   );
   const name = ext?.name ?? id;
-  const request = state.connections.find(
+  const matchingRequests = state.connections.filter(
     (r) => r.toolkit.toLowerCase() === id.toLowerCase(),
   );
+  const request =
+    matchingRequests.find((r) => r.status === "pending") ??
+    matchingRequests.at(-1);
   const task = state.tasks.find((t) => t.id === request?.task_id);
   const close = () =>
     router.canGoBack() ? router.back() : router.replace("/(tabs)/connections");
@@ -59,7 +62,7 @@ export default function ConnectScreen() {
           </View>
           <Copy style={{ color: c.muted }}>
             {done
-              ? "Your task can continue."
+              ? (task?.spoken_summary ?? "Your task can continue.")
               : (task?.goal ?? ext?.description ?? "Connect this app to Otto.")}
           </Copy>
         </View>
@@ -68,7 +71,7 @@ export default function ConnectScreen() {
         </Copy>
         {done ? (
           <Button
-            label={request ? "View task" : "Done"}
+            label={request ? "Continue task" : "Done"}
             icon="check"
             onPress={() =>
               request

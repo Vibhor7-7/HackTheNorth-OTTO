@@ -17,6 +17,7 @@ import {
 import { colors as c } from "../../src/theme";
 import { otto } from "../../src/data/mock";
 import type { Task, TaskStep } from "../../src/data/types";
+import { FactDetails, TaskJourney } from "../../src/task-journey";
 
 const labels: Record<Task["status"], string> = {
   running: "Running",
@@ -107,17 +108,13 @@ function Step({ step, last }: { step: TaskStep; last: boolean }) {
             {step.args_redacted !== undefined && (
               <>
                 <Copy style={{ fontWeight: "600" }}>Action facts</Copy>
-                <Copy selectable style={styles.json}>
-                  {JSON.stringify(step.args_redacted, null, 2)}
-                </Copy>
+                <FactDetails value={step.args_redacted} />
               </>
             )}
             {step.result_redacted !== undefined && (
               <>
                 <Copy style={{ fontWeight: "600" }}>Result</Copy>
-                <Copy selectable style={styles.json}>
-                  {JSON.stringify(step.result_redacted, null, 2)}
-                </Copy>
+                <FactDetails value={step.result_redacted} />
               </>
             )}
           </View>
@@ -143,6 +140,9 @@ export default function TaskDetail() {
   );
   const connection = state.connections.find(
     (a) => a.task_id === id && a.status === "pending",
+  );
+  const receipt = state.approvals.find(
+    (item) => item.task_id === id && item.status === "approved",
   );
   const back = () =>
     router.canGoBack() ? router.back() : router.replace("/(tabs)/tasks");
@@ -200,6 +200,52 @@ export default function TaskDetail() {
               minute: "2-digit",
             })}
           </Copy>
+          <TaskJourney task={task} />
+          {task.status === "succeeded" && (
+            <View
+              style={[
+                s.card,
+                { backgroundColor: c.accentSurface, marginBottom: 12 },
+              ]}
+            >
+              <View style={[styles.row, { marginBottom: 12 }]}>
+                <Feather name="check-circle" size={24} color={c.accent} />
+                <Copy
+                  style={{ color: c.accent, fontWeight: "600", fontSize: 20 }}
+                >
+                  Completed
+                </Copy>
+              </View>
+              <Copy selectable style={{ fontSize: 19, lineHeight: 28 }}>
+                {task.spoken_summary || task.detail_md || task.goal}
+              </Copy>
+              {receipt && (
+                <View style={{ gap: 14, marginTop: 20 }}>
+                  {Object.entries(receipt.facts)
+                    .filter(([key]) =>
+                      [
+                        "To",
+                        "Subject",
+                        "Product",
+                        "New price",
+                        "When",
+                        "Order",
+                        "Total",
+                      ].includes(key),
+                    )
+                    .map(([key, value]) => (
+                      <View key={key}>
+                        <Copy style={styles.meta}>{key}</Copy>
+                        <Copy selectable style={{ marginTop: 3 }}>
+                          {value}
+                        </Copy>
+                      </View>
+                    ))}
+                </View>
+              )}
+              <Copy style={[styles.meta, { marginTop: 16 }]}>Demo result</Copy>
+            </View>
+          )}
           {task.status === "needs_input" && (
             <View style={[s.card, { marginTop: 24 }]}>
               <Copy style={styles.cardTitle}>Which Sam?</Copy>
@@ -208,6 +254,7 @@ export default function TaskDetail() {
               </Copy>
               <Button
                 label="Sam Chen · manager"
+                disabled={state.network !== "online"}
                 onPress={async () => {
                   await Haptics.selectionAsync();
                   await otto.answerQuestion(id, "Sam Chen");
@@ -217,6 +264,7 @@ export default function TaskDetail() {
               <Button
                 quiet
                 label="Sam Patel · designer"
+                disabled={state.network !== "online"}
                 onPress={async () => {
                   await Haptics.selectionAsync();
                   await otto.answerQuestion(id, "Sam Patel");
@@ -286,9 +334,21 @@ export default function TaskDetail() {
                 Unable to finish
               </Copy>
               <Copy style={{ marginTop: 8 }}>{task.error}</Copy>
+              <View style={{ marginTop: 18 }}>
+                <Button
+                  label="Edit request in Ask"
+                  icon="edit-2"
+                  onPress={() =>
+                    router.push({
+                      pathname: "/(tabs)/chat",
+                      params: { draft: task.goal },
+                    })
+                  }
+                />
+              </View>
             </View>
           )}
-          {task.detail_md && (
+          {task.detail_md && task.status !== "succeeded" && (
             <>
               <Section title="Outcome" />
               <View style={s.card}>

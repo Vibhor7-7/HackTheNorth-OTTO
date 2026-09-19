@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import Animated, {
@@ -10,6 +10,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 import { GlassChrome } from "./glass";
 import { Button, Copy, Display } from "./ui";
+import { demoDevices, useDemoDevices } from "./data/device-demo";
 import { colors as c } from "./theme";
 
 type Device = "headphones" | "otto";
@@ -57,14 +58,19 @@ function DeviceArtwork({
 export function DevicesTile() {
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<Device>("headphones");
-  const [connected, setConnected] = useState({ headphones: true, otto: true });
-  const [justConnected, setJustConnected] = useState(false);
+  const deviceState = useDemoDevices();
+  useEffect(() => {
+    void demoDevices.initialize();
+  }, []);
+  const connected = {
+    headphones: deviceState.headphones === "connected",
+    otto: deviceState.otto === "connected",
+  };
   const reducedMotion = useReducedMotion();
   const count = Number(connected.headphones) + Number(connected.otto);
   const isConnected = connected[selected];
   const close = () => {
     setOpen(false);
-    setJustConnected(false);
   };
   return (
     <>
@@ -116,7 +122,6 @@ export function DevicesTile() {
                   accessibilityState={{ selected: selected === device }}
                   onPress={() => {
                     setSelected(device);
-                    setJustConnected(false);
                   }}
                   style={[
                     styles.deviceTab,
@@ -137,7 +142,7 @@ export function DevicesTile() {
               ))}
             </View>
             <Animated.View
-              key={selected + String(justConnected)}
+              key={selected + deviceState[selected]}
               entering={FadeInDown.duration(380).reduceMotion(
                 ReduceMotion.System,
               )}
@@ -153,8 +158,8 @@ export function DevicesTile() {
                   { color: isConnected ? c.accent : c.muted },
                 ]}
               >
-                {justConnected
-                  ? "Connected again"
+                {deviceState[selected] === "reconnecting"
+                  ? "Reconnecting"
                   : isConnected
                     ? "Connected"
                     : "Disconnected"}
@@ -162,7 +167,14 @@ export function DevicesTile() {
             </Animated.View>
             <View style={styles.details}>
               <View style={styles.detailRow}>
-                <Copy>Audio input</Copy>
+                <Copy>Connection</Copy>
+                <Copy style={styles.detailValue}>
+                  {selected === "otto" ? "Phone to Otto" : "Otto to headphones"}
+                </Copy>
+              </View>
+              <View style={styles.rule} />
+              <View style={styles.detailRow}>
+                <Copy>Microphone</Copy>
                 <Copy style={styles.detailValue}>
                   {!isConnected
                     ? "—"
@@ -175,7 +187,7 @@ export function DevicesTile() {
               </View>
               <View style={styles.rule} />
               <View style={styles.detailRow}>
-                <Copy>Audio output</Copy>
+                <Copy>Listening through</Copy>
                 <Copy style={styles.detailValue}>
                   {!isConnected
                     ? "—"
@@ -198,18 +210,16 @@ export function DevicesTile() {
             </View>
             <Button
               quiet={isConnected}
-              label={isConnected ? "Disconnect" : "Reconnect"}
+              label={
+                deviceState[selected] === "reconnecting"
+                  ? "Cancel connection"
+                  : isConnected
+                    ? "Disconnect"
+                    : "Reconnect"
+              }
               onPress={() => {
-                setConnected((previous) => ({
-                  ...previous,
-                  [selected]: !previous[selected],
-                }));
-                setJustConnected(!isConnected);
-                void Haptics.notificationAsync(
-                  isConnected
-                    ? Haptics.NotificationFeedbackType.Warning
-                    : Haptics.NotificationFeedbackType.Success,
-                );
+                void demoDevices.toggle(selected);
+                void Haptics.selectionAsync().catch(() => {});
               }}
             />
             <Copy style={styles.demo}>
@@ -316,6 +326,7 @@ const styles = StyleSheet.create({
   },
   selector: {
     flexDirection: "row",
+    flexWrap: "wrap",
     backgroundColor: c.surface,
     borderRadius: 22,
     padding: 5,
@@ -323,6 +334,7 @@ const styles = StyleSheet.create({
   },
   deviceTab: {
     flex: 1,
+    minWidth: 130,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",

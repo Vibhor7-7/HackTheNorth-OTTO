@@ -76,6 +76,7 @@ export function Button({
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={label}
+        accessibilityState={{ disabled: disabled || busy, busy }}
         disabled={disabled || busy}
         onPress={async () => {
           setBusy(true);
@@ -174,7 +175,7 @@ export function Header({
         <IconButton
           name="user"
           label="Profile"
-          onPress={() => router.push("/profile")}
+          onPress={() => router.navigate("/profile")}
         />
       </View>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>

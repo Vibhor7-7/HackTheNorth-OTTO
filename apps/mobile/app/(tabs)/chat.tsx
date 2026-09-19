@@ -1,5 +1,6 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
+  Modal,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
@@ -11,7 +12,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
-import { router } from "expo-router";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import * as Haptics from "expo-haptics";
 import Animated, {
   interpolateColor,
@@ -184,6 +185,11 @@ function SourcePreview({ kind, id }: { kind: "turn" | "task"; id: string }) {
 
 export default function ChatScreen() {
   const state = useOtto();
+  const params = useLocalSearchParams<{ draft?: string; requestId?: string }>();
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [clearOpen, setClearOpen] = useState(false);
+  const [memoryDraft, setMemoryDraft] = useState<string | null>(null);
+  const [savedMemory, setSavedMemory] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [mode, setMode] = useState<Mode>("Ask");
   const [error, setError] = useState("");
@@ -201,6 +207,44 @@ export default function ChatScreen() {
       ["transparent", c.accent],
     ),
   }));
+  const appliedRequest = useRef<string | undefined>(undefined);
+  useFocusEffect(
+    useCallback(() => {
+      const key = params.requestId ?? params.draft;
+      if (params.draft && key !== appliedRequest.current) {
+        appliedRequest.current = key;
+        setDraft(params.draft);
+        setMode("Ask");
+        input.current?.focus();
+      }
+    }, [params.draft, params.requestId]),
+  );
+  const changeChat = async (id?: string) => {
+    if (id) await otto.selectChat(id);
+    else await otto.newChat();
+    setHistoryOpen(false);
+    setMemoryDraft(null);
+    setClearOpen(false);
+    setDraft("");
+    setError("");
+    setSavedMemory(null);
+    follow.current = true;
+  };
+  const saveMemory = async () => {
+    if (!memoryDraft?.trim()) return;
+    try {
+      const previous = new Set(otto.getSnapshot().memories.map((m) => m.id));
+      await otto.addMemory(memoryDraft);
+      setSavedMemory(
+        otto.getSnapshot().memories.find((m) => !previous.has(m.id))?.id ??
+          null,
+      );
+      setMemoryDraft(null);
+      setDraft("");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not save.");
+    }
+  };
   const disabled = sending || state.streaming || state.network !== "online";
   useEffect(() => {
     const show = Keyboard.addListener(
@@ -218,6 +262,13 @@ export default function ChatScreen() {
   }, []);
   const send = async (text = draft, chosenMode: Mode = mode) => {
     if (!text.trim() || disabled || locked.current) return;
+    if (
+      chosenMode === "Remember" ||
+      /^remember (that |this: ?)?/i.test(text.trim())
+    ) {
+      setMemoryDraft(text.trim().replace(/^remember (that |this: ?)?/i, ""));
+      return;
+    }
     locked.current = true;
     setSending(true);
     setError("");
@@ -225,10 +276,7 @@ export default function ChatScreen() {
     follow.current = true;
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     try {
-      if (chosenMode === "Remember") {
-        await otto.addMemory(text.trim());
-        await otto.sendChat("What do you remember from my saved notes?");
-      } else {
+      {
         const command =
           chosenMode === "Do" &&
           !/^(please\s+)?(schedule|send|email|save|create|book|remind|set up)\b/i.test(
@@ -257,6 +305,88 @@ export default function ChatScreen() {
       >
         <View style={styles.header}>
           <Header title="Ask" />
+          <View style={styles.historyBar}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Chat history"
+              accessibilityState={{ expanded: historyOpen }}
+              onPress={() => {
+                setHistoryOpen(!historyOpen);
+                Keyboard.dismiss();
+              }}
+              style={[styles.historyTrigger, { flex: 1 }]}
+            >
+              <Copy numberOfLines={1} style={{ flex: 1, fontWeight: "600" }}>
+                {state.chatSessions.find(
+                  (chat) => chat.id === state.activeChatId,
+                )?.title ?? "New chat"}
+              </Copy>
+              <Feather
+                name={historyOpen ? "chevron-up" : "chevron-down"}
+                size={18}
+                color={c.accent}
+              />
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="New chat"
+              onPress={() => void changeChat()}
+              style={styles.historyTrigger}
+            >
+              <Feather name="edit" size={21} color={c.accent} />
+            </Pressable>
+          </View>
+          {historyOpen && (
+            <View style={styles.historyMenu}>
+              <ScrollView
+                style={{ maxHeight: 230 }}
+                keyboardShouldPersistTaps="handled"
+              >
+                {[...state.chatSessions]
+                  .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
+                  .map((chat) => (
+                    <Pressable
+                      key={chat.id}
+                      accessibilityRole="button"
+                      accessibilityState={{
+                        selected: chat.id === state.activeChatId,
+                      }}
+                      onPress={() => void changeChat(chat.id)}
+                      style={styles.historyItem}
+                    >
+                      <Feather
+                        name={
+                          chat.id === state.activeChatId
+                            ? "check"
+                            : "message-circle"
+                        }
+                        size={17}
+                        color={c.accent}
+                      />
+                      <View style={{ flex: 1 }}>
+                        <Copy numberOfLines={1}>{chat.title}</Copy>
+                        <Copy style={{ color: c.muted, fontSize: 13 }}>
+                          {new Date(chat.created_at).toLocaleDateString([], {
+                            month: "short",
+                            day: "numeric",
+                          })}
+                        </Copy>
+                      </View>
+                    </Pressable>
+                  ))}
+              </ScrollView>
+              <Button
+                quiet
+                label="Clear this chat"
+                icon="trash-2"
+                disabled={!state.messages.length}
+                onPress={() => {
+                  setHistoryOpen(false);
+                  setClearOpen(true);
+                }}
+              />
+            </View>
+          )}
         </View>
         <ScrollView
           ref={scroll}
@@ -329,7 +459,7 @@ export default function ChatScreen() {
                   {message.text ||
                     (state.streaming && latest
                       ? "Thinking…"
-                      : "No response yet.")}
+                      : "Response stopped.")}
                 </Copy>
                 {!!message.citations?.length && (
                   <View style={styles.sources}>
@@ -346,7 +476,7 @@ export default function ChatScreen() {
                     <Pressable
                       accessibilityRole="button"
                       disabled={disabled}
-                      onPress={() => void send(message.text, "Remember")}
+                      onPress={() => setMemoryDraft(message.text)}
                       style={({ pressed }) => [
                         styles.action,
                         { opacity: disabled ? 0.45 : pressed ? 0.65 : 1 },
@@ -395,10 +525,31 @@ export default function ChatScreen() {
             },
           ]}
         >
+          {savedMemory && (
+            <View style={styles.historyBar}>
+              <Copy style={{ flex: 1, color: c.accent }}>Memory saved</Copy>
+              <Button
+                quiet
+                label="Undo"
+                onPress={async () => {
+                  await otto.deleteMemory(savedMemory);
+                  setSavedMemory(null);
+                }}
+              />
+            </View>
+          )}
           {!!error && (
             <Copy accessibilityRole="alert" style={styles.error}>
               {error}
             </Copy>
+          )}
+          {!!error && (
+            <Button
+              quiet
+              label="Retry message"
+              disabled={!state.streaming && (disabled || !draft.trim())}
+              onPress={() => void send()}
+            />
           )}
           <View style={styles.modes}>
             {(["Ask", "Do", "Remember"] as const).map((item) => (
@@ -477,34 +628,163 @@ export default function ChatScreen() {
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={
-                  mode === "Remember" ? "Save context" : "Send message"
+                  state.streaming
+                    ? "Stop response"
+                    : mode === "Remember"
+                      ? "Review memory"
+                      : "Send message"
                 }
                 disabled={disabled || !draft.trim()}
-                onPress={() => void send()}
+                onPress={() =>
+                  state.streaming ? otto.stopChat() : void send()
+                }
                 style={({ pressed }) => [
                   styles.send,
                   {
                     backgroundColor:
-                      disabled || !draft.trim() ? c.raised : c.accent,
+                      !state.streaming && (disabled || !draft.trim())
+                        ? c.raised
+                        : c.accent,
                     opacity: pressed ? 0.75 : 1,
                   },
                 ]}
               >
                 <Feather
-                  name={mode === "Remember" ? "check" : "arrow-up"}
+                  name={
+                    state.streaming
+                      ? "square"
+                      : mode === "Remember"
+                        ? "check"
+                        : "arrow-up"
+                  }
                   size={23}
-                  color={disabled || !draft.trim() ? c.muted : c.onAccent}
+                  color={
+                    !state.streaming && (disabled || !draft.trim())
+                      ? c.muted
+                      : c.onAccent
+                  }
                 />
               </Pressable>
             </GlassChrome>
           </Animated.View>
         </View>
       </KeyboardAvoidingView>
+      <Modal
+        transparent
+        visible={clearOpen || memoryDraft !== null}
+        animationType="fade"
+        onRequestClose={() => {
+          setClearOpen(false);
+          setMemoryDraft(null);
+        }}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          style={styles.modalBackdrop}
+        >
+          <View accessibilityViewIsModal style={styles.modalCard}>
+            <Copy style={{ fontSize: 24, fontWeight: "700" }}>
+              {clearOpen ? "Clear this chat?" : "Remember this"}
+            </Copy>
+            {clearOpen ? (
+              <Copy style={{ color: c.muted }}>
+                Messages in this conversation will be removed. Your tasks and
+                saved memories stay.
+              </Copy>
+            ) : (
+              <TextInput
+                accessibilityLabel="Memory to save"
+                multiline
+                value={memoryDraft ?? ""}
+                onChangeText={setMemoryDraft}
+                style={[
+                  styles.input,
+                  {
+                    backgroundColor: c.background,
+                    borderRadius: 18,
+                    minHeight: 130,
+                    maxHeight: 240,
+                  },
+                ]}
+              />
+            )}
+            {!!error && !clearOpen && (
+              <Copy accessibilityRole="alert" style={{ color: c.danger }}>
+                {error}
+              </Copy>
+            )}
+            <Button
+              label={clearOpen ? "Clear chat" : "Save memory"}
+              destructive={clearOpen}
+              onPress={
+                clearOpen
+                  ? async () => {
+                      await otto.clearChat();
+                      setClearOpen(false);
+                      setError("");
+                    }
+                  : saveMemory
+              }
+            />
+            <Button
+              quiet
+              label="Cancel"
+              onPress={() => {
+                setClearOpen(false);
+                setMemoryDraft(null);
+              }}
+            />
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  historyBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 10,
+  },
+  historyTrigger: {
+    minHeight: 44,
+    paddingHorizontal: 14,
+    flexDirection: "row",
+    gap: 12,
+    alignItems: "center",
+    backgroundColor: c.surface,
+    borderRadius: 18,
+  },
+  historyMenu: {
+    backgroundColor: c.surface,
+    borderRadius: 22,
+    padding: 10,
+    marginBottom: 10,
+  },
+  historyItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    minHeight: 60,
+    padding: 10,
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.65)",
+    justifyContent: "center",
+    padding: 24,
+  },
+  modalCard: {
+    width: "100%",
+    maxWidth: 540,
+    alignSelf: "center",
+    backgroundColor: c.surface,
+    borderRadius: 28,
+    padding: 24,
+    gap: 18,
+  },
   header: {
     width: "100%",
     maxWidth: 680,

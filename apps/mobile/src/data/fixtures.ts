@@ -5,7 +5,7 @@ export function createFixtures(scenario: DemoScenario = 'default', now = Date.no
   const task = (id: string, goal: string, status: Task['status'], toolkits_used: string[], minutes: number): Task => ({ id, goal, status, source: 'voice', toolkits_used, created_at: at(minutes), updated_at: at() });
   const step = (task_id: string, seq: number, kind: TaskStep['kind'], summary: string, extra: Partial<TaskStep> = {}): TaskStep => ({ id: `${task_id}-step-${seq}`, task_id, seq, kind, summary, created_at: at(4 - seq / 2), ...extra });
   const state: DemoState = {
-    hydrated: false, network: 'online', streaming: false, messages: [],
+    hydrated: false, network: 'online', streaming: false, messages: [], activeChatId: 'chat-initial', chatSessions: [{ id: 'chat-initial', title: 'New chat', messages: [], created_at: new Date().toISOString(), updated_at: new Date().toISOString() }],
     tasks: [
       task('task-shopify', 'Put the blue hoodie on sale for 20% off', 'awaiting_approval', ['shopify'], 3),
       { ...task('task-coffee', 'Coffee with Sam next week. Send him the invite.', 'awaiting_connection', ['googlecalendar', 'gmail'], 12), spoken_summary: 'Tuesday at 10 works. Connect Gmail to send Sam the details.' },

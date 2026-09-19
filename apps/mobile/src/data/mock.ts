@@ -16,6 +16,8 @@ export class MockOtto implements OttoDataSource {
   private timers = new Set<ReturnType<typeof setTimeout>>();
   private expiry?: ReturnType<typeof setTimeout>;
   private generation = 0;
+  private chatGeneration = 0;
+  private chatTimer?: ReturnType<typeof setTimeout>;
   private serial = 0;
   private writes = Promise.resolve();
   private initializing?: Promise<void>;
@@ -28,6 +30,9 @@ export class MockOtto implements OttoDataSource {
   private emit(event: OttoEvent) { this.events.forEach(listener => listener(event)); }
   private publish(patch: Partial<DemoState> = {}) {
     this.state = { ...this.state, ...patch };
+    if (patch.messages) {
+      this.state.chatSessions = this.state.chatSessions.map(chat => chat.id === this.state.activeChatId ? { ...chat, messages: patch.messages!, title: patch.messages!.find(m => m.role === 'user')?.text.slice(0, 60) || 'New chat', updated_at: this.now() } : chat);
+    }
     this.listeners.forEach(listener => listener());
     if (this.state.hydrated) {
       const json = JSON.stringify({ version: 1, state: this.state });
@@ -69,7 +74,9 @@ export class MockOtto implements OttoDataSource {
           const stored = JSON.parse(raw);
           const s = stored.state;
           if (stored.version === 1 && s && ['tasks', 'steps', 'approvals', 'connections', 'actionItems', 'turns', 'memories', 'extensions', 'messages'].every(k => Array.isArray(s[k]))) {
-            this.state = { ...s, network: 'online', streaming: false, hydrated: false };
+            const chatSessions = Array.isArray(s.chatSessions) && s.chatSessions.length ? s.chatSessions : [{ id: 'chat-initial', title: s.messages.find((m: ChatMessage) => m.role === 'user')?.text.slice(0, 60) || 'New chat', messages: s.messages, created_at: this.now(), updated_at: this.now() }];
+            const active = chatSessions.find((chat: {id: string}) => chat.id === s.activeChatId) ?? chatSessions[0];
+            this.state = { ...s, chatSessions, activeChatId: active.id, messages: active.messages, network: 'online', streaming: false, hydrated: false };
           }
         }
       } catch { /* A malformed or unavailable cache starts a fresh demo. */ }
@@ -197,6 +204,17 @@ export class MockOtto implements OttoDataSource {
       this.advance(taskId);
     }, 1300);
   };
+  stopChat = () => { this.chatGeneration++; if (this.chatTimer) clearTimeout(this.chatTimer); if (this.state.streaming) this.publish({ streaming: false }); };
+  newChat = async () => {
+    this.stopChat();
+    const empty = this.state.chatSessions.find(chat => !chat.messages.length);
+    if (empty) { await this.selectChat(empty.id); return; }
+    const chat = { id: this.id('chat'), title: 'New chat', messages: [], created_at: this.now(), updated_at: this.now() };
+    this.publish({ chatSessions: [chat, ...this.state.chatSessions], activeChatId: chat.id, messages: [] });
+    await this.writes;
+  };
+  selectChat = async (id: string) => { const chat = this.state.chatSessions.find(item => item.id === id); if (!chat) return; this.stopChat(); this.publish({ activeChatId: id, messages: chat.messages }); await this.writes; };
+  clearChat = async () => { this.stopChat(); this.publish({ messages: [] }); await this.writes; };
   sendChat = async (text: string) => {
     this.requireOnline(); if (!text.trim() || this.state.streaming) return;
     const user: ChatMessage = { id: this.id('message'), role: 'user', text: text.trim(), created_at: this.now() };
@@ -221,21 +239,25 @@ export class MockOtto implements OttoDataSource {
       const notes = this.state.memories.filter(m => m.source === 'user');
       if (notes[0] && /sam|meeting|coffee/i.test(text)) answer += `\n\nKeeping your note in mind: ${notes[0].text}`;
     }
-    const reply: ChatMessage = { id: this.id('message'), role: 'assistant', text: '', created_at: this.now(), citations: [] };
+    const reply: ChatMessage = { id: this.id('message'), role: 'assistant', text: '', created_at: this.now(), citations: citations.filter(c => c.kind === 'task') };
     this.publish({ messages: [...this.state.messages, user, reply], streaming: true });
+    const token = ++this.chatGeneration;
+    const sessionId = this.state.activeChatId;
     const chunks = answer.match(/.{1,18}(?:\s|$)|.{1,18}/gs) ?? [answer]; let i = 0;
     const tick = () => {
+      if (token !== this.chatGeneration || sessionId !== this.state.activeChatId) return;
+      if (this.state.network !== 'online') { this.chatTimer = setTimeout(tick, 500 * this.speed); return; }
       const chunk = chunks[i++] ?? '';
       const done = i >= chunks.length;
-      this.publish({ messages: this.state.messages.map(m => m.id === reply.id ? { ...m, text: m.text + chunk, citations: done ? citations : [] } : m), streaming: !done });
-      if (!done) this.later(tick, 35);
+      this.publish({ messages: this.state.messages.map(m => m.id === reply.id ? { ...m, text: m.text + chunk, citations: done ? citations : citations.filter(c => c.kind === 'task') } : m), streaming: !done });
+      if (!done) this.chatTimer = setTimeout(tick, 35 * this.speed);
     };
-    this.later(tick, 200);
+    this.chatTimer = setTimeout(tick, 200 * this.speed);
   };
   setNetwork = (network: NetworkState) => { this.publish({ network }); };
-  reset = async (scenario: DemoScenario = 'default') => { this.clearTimers(); this.generation++; this.initializing = undefined; this.state = createFixtures(scenario); this.publish({ hydrated: true }); await this.writes; };
+  reset = async (scenario: DemoScenario = 'default') => { this.stopChat(); this.clearTimers(); this.generation++; this.initializing = undefined; this.state = createFixtures(scenario); this.publish({ hydrated: true }); await this.writes; };
   private clearTimers() { this.timers.forEach(clearTimeout); this.timers.clear(); if (this.expiry) clearTimeout(this.expiry); }
-  dispose = () => { this.generation++; this.clearTimers(); this.listeners.clear(); this.events.clear(); };
+  dispose = () => { this.stopChat(); this.generation++; this.clearTimers(); this.listeners.clear(); this.events.clear(); };
 }
 
 export const otto: OttoDataSource = new MockOtto();

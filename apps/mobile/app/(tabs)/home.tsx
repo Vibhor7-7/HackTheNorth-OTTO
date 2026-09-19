@@ -5,6 +5,7 @@ import {
   ScrollView,
   StyleSheet,
   RefreshControl,
+  useWindowDimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
@@ -30,6 +31,7 @@ import {
   useOtto,
   s,
 } from "../../src/ui";
+import { TaskJourney } from "../../src/task-journey";
 import { DevicesTile } from "../../src/devices";
 import { SignalScene } from "../../src/visuals/SignalScene";
 import { otto } from "../../src/data/mock";
@@ -37,6 +39,8 @@ import type { HomePayload } from "../../src/data/types";
 
 export default function Home() {
   const state = useOtto();
+  const { fontScale, width } = useWindowDimensions();
+  const largeText = fontScale > 1.3;
   const [home, setHome] = useState<HomePayload>();
   const [refreshing, setRefreshing] = useState(false);
   const [selected, setSelected] = useState(6);
@@ -48,7 +52,7 @@ export default function Home() {
     return () => {
       live = false;
     };
-  }, [state]);
+  }, [state.approvals, state.connections, state.actionItems, state.tasks]);
   const y = useSharedValue(0);
   const reduced = useReducedMotion();
   const scroll = useAnimatedScrollHandler((e) => {
@@ -74,7 +78,31 @@ export default function Home() {
     (home?.approvals.length ?? 0) +
     (home?.connections.length ?? 0) +
     tasks.filter((t) => t.status === "needs_input").length;
-  const approval = home?.approvals[0];
+  const approval = [...(home?.approvals ?? [])].sort((a, b) =>
+    a.expires_at.localeCompare(b.expires_at),
+  )[0];
+  const primaryTask =
+    active[0] ??
+    tasks.find((t) =>
+      ["needs_input", "awaiting_connection", "awaiting_approval"].includes(
+        t.status,
+      ),
+    );
+  const openUrgent = () => {
+    if (approval)
+      router.push({ pathname: "/approval/[id]", params: { id: approval.id } });
+    else if (home?.connections[0])
+      router.push({
+        pathname: "/connect/[id]",
+        params: { id: home.connections[0].toolkit },
+      });
+    else {
+      const question = tasks.find((t) => t.status === "needs_input");
+      if (question)
+        router.push({ pathname: "/task/[id]", params: { id: question.id } });
+      else router.push("/urgent");
+    }
+  };
   const days = Array.from({ length: 7 }, (_, index) => {
     const date = new Date();
     date.setDate(date.getDate() - 6 + index);
@@ -114,7 +142,31 @@ export default function Home() {
           title="Today"
           right={<Copy style={{ color: c.muted }}>Demo</Copy>}
         />
-        <View style={h.hero}>
+        {urgent > 0 && (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={
+              urgent + " pending decisions. Review next decision"
+            }
+            onPress={openUrgent}
+            style={{
+              backgroundColor: c.accentSurface,
+              borderRadius: 20,
+              padding: 16,
+              marginBottom: 16,
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 12,
+            }}
+          >
+            <Feather name="shield" size={22} color={c.accent} />
+            <Copy style={{ flex: 1, fontWeight: "600" }}>
+              {urgent} {urgent === 1 ? "decision needs" : "decisions need"} you
+            </Copy>
+            <Feather name="arrow-right" size={22} color={c.accent} />
+          </Pressable>
+        )}
+        <View style={[h.hero, largeText && { height: 400 }]}>
           <Animated.View style={sceneStyle}>
             <SignalScene active={active.length > 0} />
           </Animated.View>
@@ -136,11 +188,20 @@ export default function Home() {
             </Pressable>
           </View>
         </View>
-        <View style={h.summary}>
+        <View style={[h.summary, largeText && { flexDirection: "column" }]}>
           <View style={{ flex: 1, gap: 12, justifyContent: "center" }}>
             <Pressable
               accessibilityRole="button"
-              onPress={() => router.push("/(tabs)/tasks")}
+              onPress={() =>
+                router.push({
+                  pathname: "/(tabs)/tasks",
+                  params: {
+                    filter: "history",
+                    date: new Date().toDateString(),
+                    outcome: "succeeded",
+                  },
+                })
+              }
               style={{ gap: 2, minHeight: 76, justifyContent: "center" }}
             >
               <Display style={{ fontSize: 34 }}>
@@ -153,7 +214,12 @@ export default function Home() {
             />
             <Pressable
               accessibilityRole="button"
-              onPress={() => router.push("/(tabs)/tasks")}
+              onPress={() =>
+                router.push({
+                  pathname: "/(tabs)/tasks",
+                  params: { filter: "running", date: "", outcome: "" },
+                })
+              }
               style={{ gap: 2, minHeight: 76, justifyContent: "center" }}
             >
               <Display style={{ fontSize: 34, color: c.accent }}>
@@ -164,6 +230,32 @@ export default function Home() {
           </View>
           <DevicesTile />
         </View>
+        {primaryTask && (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={"View task: " + primaryTask.goal}
+            onPress={() =>
+              router.push({
+                pathname: "/task/[id]",
+                params: { id: primaryTask.id },
+              })
+            }
+            style={{
+              marginTop: 20,
+              padding: 20,
+              borderRadius: 24,
+              backgroundColor: c.surface,
+            }}
+          >
+            <Copy
+              numberOfLines={2}
+              style={{ fontWeight: "600", marginBottom: 16 }}
+            >
+              {primaryTask.goal}
+            </Copy>
+            <TaskJourney task={primaryTask} compact />
+          </Pressable>
+        )}
         <Section title="Urgent" aside={urgent ? String(urgent) : undefined} />
         <Reveal
           style={[h.urgent, { backgroundColor: urgent ? c.accent : c.surface }]}
@@ -201,7 +293,7 @@ export default function Home() {
             label={urgent ? "Review urgent" : "Open inbox"}
             quiet
             icon="arrow-right"
-            onPress={() => router.push("/urgent")}
+            onPress={openUrgent}
           />
         </Reveal>
         <Pressable
@@ -236,8 +328,14 @@ export default function Home() {
             </Copy>
             <Feather name="bar-chart-2" size={22} color={c.accent} />
           </View>
-          <View
-            style={{ flexDirection: "row", gap: 10, alignItems: "flex-end" }}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{
+              flexDirection: "row",
+              gap: 8,
+              alignItems: "flex-end",
+            }}
           >
             {days.map((d, index) => (
               <Pressable
@@ -246,7 +344,11 @@ export default function Home() {
                 accessibilityLabel={`${d.date.toLocaleDateString()}: ${d.completed.length} completed tasks`}
                 accessibilityState={{ selected: index === selected }}
                 onPress={() => setSelected(index)}
-                style={{ flex: 1, alignItems: "center", gap: 12 }}
+                style={{
+                  width: Math.max(44, (Math.min(width, 680) - 136) / 7),
+                  alignItems: "center",
+                  gap: 12,
+                }}
               >
                 <View
                   style={{
@@ -278,7 +380,7 @@ export default function Home() {
                 </Copy>
               </Pressable>
             ))}
-          </View>
+          </ScrollView>
           {day.completed.length > 0 && (
             <Pressable
               accessibilityRole="button"
@@ -318,7 +420,12 @@ export default function Home() {
         </ScrollView>
         <Pressable
           accessibilityRole="button"
-          onPress={() => router.push("/(tabs)/tasks")}
+          onPress={() =>
+            router.push({
+              pathname: "/(tabs)/tasks",
+              params: { filter: "queue", date: "", outcome: "" },
+            })
+          }
           style={[h.channel, { marginTop: 24 }]}
         >
           <Copy style={{ flex: 1, fontWeight: "600" }}>

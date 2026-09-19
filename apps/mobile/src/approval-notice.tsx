@@ -8,7 +8,7 @@ import {
   useWindowDimensions,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { router } from "expo-router";
+import { router, usePathname } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { GlassChrome } from "./glass";
@@ -17,21 +17,48 @@ import { colors as c } from "./theme";
 import { otto } from "./data/mock";
 import { decideApproval, timeRemaining } from "./data/approval-channel";
 
+// A notice is an arrival, not a second persistent approval inbox.
+const seenApprovals = new Set<string>();
+
 export function ApprovalNotice() {
   const state = useOtto();
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
-  const [dismissed, setDismissed] = useState<string[]>([]);
+  const pathname = usePathname();
+  const [noticeId, setNoticeId] = useState<string>();
   const [expandedId, setExpandedId] = useState<string>();
   const [now, setNow] = useState(() => Date.now());
-  const approval = state.hydrated
-    ? state.approvals.find(
-        (a) =>
-          a.status === "pending" &&
-          Date.parse(a.expires_at) > now &&
-          !dismissed.includes(a.id),
-      )
-    : undefined;
+  useEffect(() => {
+    const receive = () => {
+      const snapshot = otto.getSnapshot();
+      if (!snapshot.hydrated) return;
+      const arrivals = snapshot.approvals.filter(
+        (item) =>
+          item.status === "pending" &&
+          Date.parse(item.expires_at) > Date.now() &&
+          !seenApprovals.has(`${item.id}:${item.expires_at}`),
+      );
+      arrivals.forEach((item) =>
+        seenApprovals.add(`${item.id}:${item.expires_at}`),
+      );
+      const next = arrivals.find(
+        (item) => pathname !== "/urgent" && pathname !== `/approval/${item.id}`,
+      );
+      if (next) setNoticeId(next.id);
+    };
+    const unsubscribe = otto.subscribe(receive);
+    const initial = setTimeout(receive, 0);
+    return () => {
+      clearTimeout(initial);
+      unsubscribe();
+    };
+  }, [pathname]);
+  const approval = state.approvals.find(
+    (item) =>
+      item.id === noticeId &&
+      item.status === "pending" &&
+      Date.parse(item.expires_at) > now,
+  );
   const id = approval?.id;
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000);
@@ -39,13 +66,34 @@ export function ApprovalNotice() {
   }, []);
   useEffect(() => {
     if (id)
-      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      void Haptics.notificationAsync(
+        Haptics.NotificationFeedbackType.Warning,
+      ).catch(() => {});
   }, [id]);
+  useEffect(() => {
+    if (!noticeId || expandedId) return;
+    const timer = setTimeout(() => setNoticeId(undefined), 8000);
+    return () => clearTimeout(timer);
+  }, [noticeId, expandedId]);
+  useEffect(() => {
+    if (pathname === "/urgent" || pathname === `/approval/${noticeId}`) {
+      const timer = setTimeout(() => {
+        setNoticeId(undefined);
+        setExpandedId(undefined);
+      }, 0);
+      return () => clearTimeout(timer);
+    }
+  }, [pathname, noticeId]);
   const dismiss = () => {
-    if (id) setDismissed((ids) => [...ids, id]);
+    setNoticeId(undefined);
     setExpandedId(undefined);
   };
-  if (!approval) return null;
+  if (
+    !approval ||
+    pathname === "/urgent" ||
+    pathname === `/approval/${approval.id}`
+  )
+    return null;
   return (
     <View
       pointerEvents="box-none"

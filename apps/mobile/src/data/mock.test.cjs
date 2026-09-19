@@ -87,3 +87,38 @@ test('SSE events carry the complete updated object', async t => {
   assert.ok(event.data.facts.To); assert.equal(event.data.task_id, 'task-coffee');
   assert.ok(events.some(e => e.type === 'connection.updated' && e.data.status === 'completed'));
 });
+
+test('new chat, selection and persistence retain conversations without touching tasks', async t => {
+  const cache = storage(); const store = new MockOtto(cache, .01); t.after(() => store.dispose()); await store.initialize();
+  await store.sendChat('What did I do today?'); await until(() => !store.getSnapshot().streaming);
+  const first = store.getSnapshot().activeChatId; const original = store.getSnapshot().messages;
+  await store.newChat(); assert.equal(store.getSnapshot().messages.length, 0);
+  await store.sendChat('What is open?'); await until(() => !store.getSnapshot().streaming);
+  await store.selectChat(first); assert.deepEqual(store.getSnapshot().messages, original);
+  const restored = new MockOtto(cache, .01); t.after(() => restored.dispose()); await restored.initialize();
+  assert.equal(restored.getSnapshot().chatSessions.length, 2); assert.deepEqual(restored.getSnapshot().messages, original);
+  const taskCount = store.getSnapshot().tasks.length; const notes = store.getSnapshot().memories;
+  await store.clearChat(); assert.equal(store.getSnapshot().tasks.length, taskCount); assert.deepEqual(store.getSnapshot().memories, notes);
+  assert.equal(store.getSnapshot().messages.length, 0);
+});
+
+test('stop, switch and clear invalidate streaming callbacks while task execution continues', async t => {
+  const store = await setup(t);
+  await store.sendChat('Save this in Notion'); store.stopChat();
+  const text = store.getSnapshot().messages.at(-1).text; await wait(80);
+  assert.equal(store.getSnapshot().messages.at(-1).text, text);
+  assert.equal(store.getSnapshot().tasks[0].status, 'succeeded');
+  await store.sendChat('What did I do today?'); const first = store.getSnapshot().activeChatId; await store.newChat(); await wait(80);
+  assert.equal(store.getSnapshot().messages.length, 0); assert.equal(store.getSnapshot().streaming, false);
+  await store.selectChat(first); await store.sendChat('What is open?'); await store.clearChat(); await wait(80);
+  assert.equal(store.getSnapshot().messages.length, 0); assert.equal(store.getSnapshot().streaming, false);
+});
+
+test('legacy messages migrate to a recoverable first conversation', async t => {
+  const state = createFixtures(); delete state.chatSessions; delete state.activeChatId;
+  state.messages = [{id:'old-message', role:'user', text:'My old conversation', created_at:new Date().toISOString()}];
+  const cache = {getItem: async () => JSON.stringify({version:1,state}),setItem:async()=>{}};
+  const store = new MockOtto(cache,.01); t.after(()=>store.dispose()); await store.initialize();
+  assert.equal(store.getSnapshot().chatSessions[0].title,'My old conversation');
+  await store.newChat(); await store.selectChat('chat-initial'); assert.equal(store.getSnapshot().messages[0].id,'old-message');
+});
