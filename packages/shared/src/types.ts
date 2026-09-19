@@ -34,7 +34,7 @@ export interface Approval {
   summary: string; facts: Record<string, string>;
   args_hash: string;
   status: "pending" | "approved" | "denied" | "expired";
-  channel?: "sms" | "app"; expires_at: string; decided_at?: string;
+  channel?: "app"; expires_at: string; decided_at?: string;
 }
 
 export interface ConnectionRequest {

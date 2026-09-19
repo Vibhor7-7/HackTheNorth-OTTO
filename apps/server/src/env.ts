@@ -33,18 +33,8 @@ export const env = {
   composioApiKey: opt("COMPOSIO_API_KEY"),
   composioUserId: opt("COMPOSIO_USER_ID", "demo-user"),
 
-  // D-22: when SMS_PROVIDER is unset, the Home tab is the confirmation surface
-  // and Otto says "check the app to confirm" instead of "I've texted you".
-  smsProvider: opt("SMS_PROVIDER") as "twilio" | "linq" | "",
-  smsFrom: opt("SMS_FROM"),
-  smsUserPhone: opt("SMS_USER_PHONE"),
-  twilioAccountSid: opt("TWILIO_ACCOUNT_SID"),
-  twilioAuthToken: opt("TWILIO_AUTH_TOKEN"),
-
   demoMode: opt("DEMO_MODE", "false") === "true",
   realtimeIdleTimeoutMs: num("REALTIME_IDLE_TIMEOUT_MS", 60000),
 
   databasePath: opt("DATABASE_PATH", "./data/otto.sqlite"),
 } as const;
-
-export const smsEnabled = Boolean(env.smsProvider && env.smsUserPhone && env.smsFrom);

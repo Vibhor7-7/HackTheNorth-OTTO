@@ -32,7 +32,7 @@ export function approvalRoutes(app: FastifyInstance): void {
       }
 
       const approval = decideApproval(req.params.id, decision === "approve" ? "approved" : "denied", "app");
-      log.info("decision from app", { task_id: existing.task_id, decision });
+      log.info("decision", { task_id: existing.task_id, decision });
 
       // [TODO AP-4] Resume or cancel the held task. The gate holds the call and
       // its args_hash (AP-5); this is where it is released.

@@ -1,6 +1,6 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
-import { env, smsEnabled } from "../env";
+import { env } from "../env";
 import { requireAppKey } from "./auth";
 import { openEventStream } from "./sse";
 import { homeRoutes } from "./routes/home";
@@ -11,7 +11,7 @@ import { actionItemRoutes } from "./routes/actionItems";
 import { contextRoutes } from "./routes/context";
 import { extensionRoutes } from "./routes/extensions";
 import { chatRoutes } from "./routes/chat";
-import { webhookRoutes } from "./routes/webhooks";
+import { connectCallbackRoutes } from "./routes/connectCallback";
 
 export function buildApp() {
   // Fastify's own logger is off: NF-4 wants one structured line per event from
@@ -25,7 +25,6 @@ export function buildApp() {
     ok: true,
     uptime_s: Math.round(process.uptime()),
     demo_mode: env.demoMode,
-    sms: smsEnabled,
   }));
 
   homeRoutes(app);
@@ -36,7 +35,7 @@ export function buildApp() {
   contextRoutes(app);
   extensionRoutes(app);
   chatRoutes(app);
-  webhookRoutes(app);
+  connectCallbackRoutes(app);
 
   app.get("/api/events", (req, reply) => openEventStream(req, reply));
 

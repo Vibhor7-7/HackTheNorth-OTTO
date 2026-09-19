@@ -29,7 +29,7 @@ export const argsHash = (args: unknown) =>
 export function createApproval(input: {
   task_id: string; step_id: string; summary: string;
   facts: Record<string, string>; args_hash: string;
-  channel?: "sms" | "app";
+  channel?: "app";
 }): Approval {
   const approval: Approval = {
     id: newId("apr"),
@@ -74,7 +74,7 @@ export function findPendingByCode(code: string): Approval | undefined {
 export function decideApproval(
   id: string,
   status: "approved" | "denied" | "expired",
-  channel?: "sms" | "app",
+  channel?: "app",
 ): Approval | undefined {
   const current = getApproval(id);
   if (!current || current.status !== "pending") return current;

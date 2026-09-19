@@ -59,10 +59,16 @@ htn-voice/         Friday spike, reference only - not wired into the build
   (VG-13, NF-7). An orphaned session streaming silence bills continuously.
 - **Secrets never reach a TaskStep or an SSE payload** (DATA-3). `store/steps.ts`
   redacts on the way in so no caller can forget.
+- **Only an `ACTIVE` Composio account counts as connected.** `INITIALIZING` means
+  someone abandoned a connect flow; treating it as connected makes the agent call
+  tools that cannot work and silently skips S0's Connect Link beat.
+- **There is no SMS channel** (D-24). The app is the only confirmation surface, so
+  never add a second one without a Decision.
 - **Raw audio is never stored** (DATA-1). Transcripts only.
 
 ## Unfinished seams
 
 Grep for `[TODO` - each one names the requirement IDs that finish it:
-`AG-2` (the Responses tool loop), `CMP-1/3/4/6` (Composio), `AP-3/AP-4` (the SMS
-approval state machine), `ACT-1` (extraction), `CHAT-1` (the context agent).
+`AG-2` (the Responses tool loop), `AP-4` (resuming a task once its approval is
+decided), `ACT-1` (extraction), `CHAT-1` (the context agent). Composio (CMP-1,
+CMP-3, CMP-4, CMP-6) is wired and verified against the live account.

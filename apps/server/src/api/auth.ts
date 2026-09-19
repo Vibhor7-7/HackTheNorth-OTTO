@@ -1,10 +1,11 @@
 // Section 7.2: every /api request carries Authorization: Bearer <APP_API_KEY>.
-// Webhooks and the Composio callback are exempt (they authenticate differently).
+// The Composio connect callback is exempt: the browser arriving there is not the
+// app and has no key.
 
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { env } from "../env";
 
-const EXEMPT = ["/webhooks/", "/connect/callback", "/health"];
+const EXEMPT = ["/connect/callback", "/health"];
 
 export function requireAppKey(req: FastifyRequest, reply: FastifyReply, done: () => void): void {
   if (EXEMPT.some((p) => req.url.startsWith(p))) return done();

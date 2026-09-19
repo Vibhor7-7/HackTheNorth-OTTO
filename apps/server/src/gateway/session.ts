@@ -343,7 +343,7 @@ export class DeviceSession {
       setTimeout(() => resolve("timeout"), FAST_LANE_TIMEOUT_MS));
 
     const outcome = await Promise.race([
-      gate({ task_id, slug: tool.slug, args: call.args, fast_lane: true, timeout_ms: FAST_LANE_TIMEOUT_MS }),
+      gate({ task_id, slug: tool.slug, args: call.args, fast_lane: true }),
       timeout,
     ]);
 

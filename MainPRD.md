@@ -3,10 +3,10 @@
 | | |
 |---|---|
 | Event | Hack the North 2026 |
-| Spec version | 1.3.0 (supersedes 1.2.0) |
+| Spec version | 1.4.0 (supersedes 1.3.0) |
 | Product name | **Otto.** The device, the agent, and the app are all Otto. Use the name in the system prompt, the app, and the pitch. |
 | Status | **Final for build.** Open decisions in Section 13 only. |
-| Tracks | OpenAI API Prizes, Composio, Expo (primary). Rox, Shopify (natural fit, no extra work). Elastic: cut (D-12). |
+| Tracks | OpenAI API Prizes, Composio, Expo (primary). Rox (natural fit, no extra work). Shopify: cut (D-25). Elastic: cut (D-12). |
 
 
 ---
@@ -38,7 +38,7 @@ Single source of truth. Written for teammates and for AI coding assistants (Code
 
 ### 1.1 One-liner
 
-Otto is a push-to-talk wearable that lets you hand off real tasks by voice, anywhere. Otto finds and connects whatever tools the task needs, does the work, and texts you before anything risky.
+Otto is a push-to-talk wearable that lets you hand off real tasks by voice, anywhere. Otto finds and connects whatever tools the task needs, does the work, and asks you before anything risky.
 
 ### 1.2 Problem
 
@@ -48,8 +48,8 @@ Voice assistants answer questions but cannot get work done across your real tool
 
 - **Hardware first.** One button, no screen, no wake word. Hold, speak, release. Capture takes four seconds.
 - **Acts, not records.** Note-taking wearables produce a document. This one produces a completed task.
-- **Do anything anywhere.** No integration setup. The agent searches 1,500+ apps at runtime, and if a tool needs an account it has not connected, it texts you a link. Tap it, and the task finishes.
-- **Safe by default.** Money, orders, sends on your behalf, and public changes wait for an SMS YES.
+- **Do anything anywhere.** No integration setup. The agent searches 1,500+ apps at runtime, and if a tool needs an account it has not connected, it asks you to connect it. One tap, and the task finishes.
+- **Safe by default.** Money, orders, sends on your behalf, and public changes wait for your explicit approval (D-24).
 - **Not always listening.** You choose when it hears you. This is a product stance, not a limitation, and it is the answer to the privacy question before a judge asks it.
 
 ### 1.4 Non-goals (hackathon build)
@@ -98,11 +98,10 @@ Voice assistants answer questions but cannot get work done across your real tool
  │ Expo app iOS │ ◀──────────────────────────────▶ │      │                                        │
  └──────────────┘                                  │      ▼                                        │
                                                    │  Approval Gate (risk tier R0/R1/R2)           │
- ┌──────────────┐  SMS: approvals + connect links  │      │                                        │
- │ User's phone │ ◀──────────────────────────────▶ │      ▼                                        │
- └──────────────┘                                  │  Composio (discover, connect, execute)        │
+                                                   │      ▼                                        │
+                                                   │  Composio (discover, connect, execute)        │
                                                    │      │            ──▶ Google Calendar         │
-                                                   │      │            ──▶ Shopify                 │
+                                                   │      │            ──▶ WhatsApp                │
                                                    │      │            ──▶ 1,500+ others           │
                                                    │  Store (SQLite)                               │
                                                    └───────────────────────────────────────────────┘
@@ -121,7 +120,7 @@ Voice assistants answer questions but cannot get work done across your real tool
 
 **Why the voice agent gets a fast lane at all.** "Am I free at 3?" should be answered in the same breath, not handed off with "on it." Realtime function tools are executed by our gateway, so nothing bypasses the gate or the log. The only real constraint is that the voice model cannot speak while a call is outstanding, which is why the fast lane is read-only, single-call, capped at two tools, and hard-timed out at 2.5 s with escalation to `run_task` (VG-16). If the calendar tools are flaky on the venue network, delete them from the allowlist (CMP-9) and the product still works.
 
-**Why the Task Agent sits between the LLM and Composio.** Composio can execute tools directly from an agent loop. We do not let it. Every tool call the LLM selects passes through our Approval Gate (AP-1) before `composio.tools.execute()` runs. This is what makes SMS approval impossible to bypass and gives the app a complete step log. It is also the "decision-making under uncertainty" story for judges.
+**Why the Task Agent sits between the LLM and Composio.** Composio can execute tools directly from an agent loop. We do not let it. Every tool call the LLM selects passes through our Approval Gate (AP-1) before `composio.tools.execute()` runs. This is what makes approval impossible to bypass and gives the app a complete step log. It is also the "decision-making under uncertainty" story for judges.
 
 **Latency posture.** The voice path has exactly one network hop that is not OpenAI: device to server. No memory retrieval, no search, no database query happens between `ptt_end` and `response.create`. User profile context is baked into session instructions at session start (VG-10). This is why Elastic was cut (D-12).
 
@@ -139,7 +138,6 @@ Voice assistants answer questions but cannot get work done across your real tool
 | Store | SQLite via better-sqlite3 or Drizzle | Single file, zero setup. Memory retrieval is recency + keyword (DATA-4). |
 | Mobile | Expo (React Native, TypeScript), iOS target | Expo Router, Expo UI where it helps the native feel. Docs: docs.expo.dev, `llms.txt` for agents. |
 | App live updates | Server-Sent Events | One-way feed, simpler than WS. |
-| SMS | Twilio (default) or Linq | OD-2. |
 | Hosting | Laptop + cloudflared tunnel (default) or Railway/Fly | Must expose `wss://` and `https://`. |
 | Dev tooling | Codex (CLI, app, cloud tasks) as primary coding agent | Section 11.1 for evidence requirements. |
 
@@ -161,7 +159,7 @@ Voice assistants answer questions but cannot get work done across your real tool
 │   │       ├── gateway/       <- device WS + Realtime relay (VG-*)
 │   │       ├── agent/         <- task agent loop (AG-*)
 │   │       ├── composio/      <- discovery, connect, execute wrappers (CMP-*)
-│   │       ├── approvals/     <- risk gate + SMS state machine (AP-*)
+│   │       ├── approvals/     <- risk gate + approval state machine (AP-*)
 │   │       ├── extract/       <- action item extraction worker (ACT-*)
 │   │       ├── chat/          <- context agent for the Chat tab (CHAT-*)
 │   │       ├── api/           <- REST + SSE (7.2)
@@ -177,7 +175,7 @@ Voice assistants answer questions but cannot get work done across your real tool
 
 ```
 PORT
-PUBLIC_BASE_URL              # https://... for SMS webhooks and connect-link callbacks
+PUBLIC_BASE_URL              # https://... for connect-link callbacks
 DEVICE_TOKEN                 # shared secret the ESP32 presents
 APP_API_KEY                  # shared secret the Expo app presents
 
@@ -191,11 +189,6 @@ CHAT_MODEL                   # model for the Chat tab context agent, CHAT-1
 
 COMPOSIO_API_KEY
 COMPOSIO_USER_ID             # default demo-user
-
-SMS_PROVIDER                 # twilio | linq
-SMS_FROM
-SMS_USER_PHONE
-TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN   (or Linq equivalents)
 
 DEMO_MODE                    # true = enable fallbacks in Section 8
 REALTIME_IDLE_TIMEOUT_MS     # default 60000 (VG-13)
@@ -281,10 +274,10 @@ Replaces the former MCP-1 to MCP-5 (D-10). Composio provides three things and we
 
 | ID | Pri | Requirement |
 |---|---|---|
-| CMP-1 | P0 | **Discovery.** `composio/discover.ts`: given a task goal, search Composio's catalog and return tool definitions in OpenAI function-calling shape for the chosen toolkits. Use the OpenAI provider from Composio so no schema translation is hand-written. Log which toolkits matched and the top three candidates that were not chosen. |
-| CMP-2 | P0 | **Managed auth.** No per-integration tokens in env. Connected accounts live in Composio, scoped to `COMPOSIO_USER_ID`. Pre-connect Google Calendar and Shopify before the demo via the Composio dashboard or a one-off script. |
+| CMP-1 | P0 | **Discovery.** `composio/discover.ts`: given a task goal, select **toolkits** from those the user has set up, then load a curated tool subset for each selected toolkit and return them in OpenAI function-calling shape via Composio's OpenAI provider. Write a `plan` step naming the toolkits chosen and the top three not chosen. Tool-level `search` is a best-effort hint that may widen the candidate set; it must never be the only path, and a bare `limit` must never be passed (D-26). |
+| CMP-2 | P0 | **Managed auth.** No per-integration tokens in env. Connected accounts live in Composio, scoped to `COMPOSIO_USER_ID`. Pre-connect Google Calendar before the demo via the Composio dashboard. Create the WhatsApp auth config but leave it **unconnected** - that absence is S0 (D-16). Creating a Connect Link needs an API key with `connected_accounts` **write** access, and uses `connectedAccounts.link(userId, authConfigId, { callbackUrl })` - `.initiate` returns 400 for Composio-managed OAuth configs, which is what every dashboard-created toolkit is. |
 | CMP-3 | P0 | **Execution.** `composio/execute.ts` exposes `executeTool(slug, args)` which calls Composio execution for the user, with 30 s timeout, one retry, and structured errors. **Only `approvals/gate.ts` imports this file.** |
-| CMP-4 | P0 | **Connect Link flow.** When execution returns a needs-authentication result, do not fail the task. Create a ConnectionRequest (7.3), set task status `awaiting_connection`, send the Connect Link by SMS ("Otto needs access to Gmail. Tap to connect: <link>") and surface it in the app. When the user completes it, retry the exact same tool call once, then continue. This is demo scenario S0. |
+| CMP-4 | P0 | **Connect Link flow.** When execution returns a needs-authentication result, do not fail the task. Create a ConnectionRequest (7.3), set task status `awaiting_connection`, and surface the Connect Link in the app's "Needs you" card (APP-1, APP-7). When the user completes it, retry the exact same tool call once, then continue. This is demo scenario S0. |
 | CMP-5 | P0 | **Risk tiering of Composio tools.** Tier is derived from the tool slug by rule (7.6), with an argument-level override that can raise but never lower. Unknown tools default to R2. Replaces MCP-5. |
 | CMP-6 | P1 | Extensions screen data: list Composio toolkits with connection status for the user (connected / needs_auth / suggested) so APP-4 has real data. |
 | CMP-7 | P1 | Cache discovery results per goal string for the session so repeated demo runs do not pay the search cost twice. |
@@ -299,12 +292,12 @@ Replaces the former MCP-1 to MCP-5 (D-10). Composio provides three things and we
 |---|---|---|
 | AP-1 | P0 | Before every tool call, classify by tier. **R0** read-only: run. **R1** reversible write: run, log, mention in spoken summary. **R2** money, orders, sends on the user's behalf, destructive or public changes: hold for approval. |
 | AP-2 | P0 | Tier comes from CMP-5. Argument override raises tier for any call with an amount, price, recipient, or `publish` field. Never lowers. |
-| AP-3 | P0 | R2 flow: create Approval (`pending`), send SMS with plain-language summary, key facts (what, to whom, how much), and a 4-digit code: `Reply YES 4821 to approve or NO 4821 to cancel`. Task status `awaiting_approval`. Device speaks "I've texted you to confirm." |
-| AP-4 | P0 | Inbound SMS webhook matches code, sets `approved` or `denied`, resumes or cancels the task. Expire after 5 minutes as denied. |
+| AP-3 | P0 | R2 flow: create Approval (`pending`) with a plain-language summary and key facts (what, to whom, how much). Task status `awaiting_approval`. It appears instantly in the Home tab's "Needs you" card over SSE (APP-1). Device speaks "check the app to confirm." |
+| AP-4 | P0 | `POST /api/approvals/:id/decision` sets `approved` or `denied`, and resumes or cancels the task. Expire after 5 minutes as denied, swept on a timer as well as on read so a waiting task never hangs. |
 | AP-5 | P0 | An approved action executes exactly once with exactly the arguments shown to the user (`args_hash`). Changed arguments require a new approval. |
-| AP-6 | P0 | The app can also approve or deny (APP-1, Home tab "Needs you" section). This is the **primary** confirmation surface when SMS is not configured, and the fallback when SMS delivery fails on stage. |
-| AP-7 | P1 | Verify inbound sender matches `SMS_USER_PHONE`; validate provider webhook signature. |
-| AP-8 | P0 | ConnectionRequests (CMP-4) use the same SMS channel and the same app card as Approvals. One interaction model: the phone buzzes when the agent needs you, for one of two reasons. |
+| AP-6 | P0 | The app is the **only** confirmation surface (APP-1, Home tab "Needs you"). There is no second channel to fall back to, which makes APP-1 the most important screen in the product: it is the entire trust story on stage (D-24). |
+| ~~AP-7~~ | | ~~Verify inbound sender matches `SMS_USER_PHONE`; validate provider webhook signature~~ `[REMOVED]` D-24. |
+| AP-8 | P0 | ConnectionRequests (CMP-4) use the same app card as Approvals. One interaction model: the "Needs you" card fills when the agent needs you, for one of two reasons. |
 
 ### 6.6 Mobile app (APP)
 
@@ -314,7 +307,7 @@ Expo, iOS target, single user, `APP_API_KEY`. **Four tabs: Home, Context, Connec
 
 | ID | Pri | Requirement |
 |---|---|---|
-| APP-1 | P0 | **"Needs you" section**, pinned at the top. Pending Approvals (same facts as the SMS, Approve / Deny with haptic) and pending ConnectionRequests (Open Link). When `SMS_PROVIDER` is unset or a send fails, this is the only confirmation surface, and the device says "check the app to confirm" instead of "I've texted you." Empty state: "Nothing needs you." |
+| APP-1 | P0 | **"Needs you" section**, pinned at the top. Pending Approvals (summary, key facts, Approve / Deny with haptic) and pending ConnectionRequests (Open Link). This is the **only** confirmation surface in the product (AP-6, D-24), so it carries the whole safety story: make it the best screen in the app. Arrives over SSE the instant the agent asks. Empty state: "Nothing needs you." |
 | APP-3 | P0 | **Action items section.** Each open ActionItem (6.9) as a card: title, the suggested action in plain words ("Schedule via Google Calendar"), a confidence pill, and a one-line snippet of what was said. Two buttons: **Do it** (POST approve, card flips to the new Task with a live status chip) and **Dismiss**. |
 | APP-13 | P0 | **Recent activity** below action items: reverse-chronological Task feed with status chip, spoken summary, timestamp. Live over SSE. Tapping opens Task detail (APP-2). |
 | APP-14 | P1 | Tab badge = pending approvals + pending connections + open action items. Clears as they are handled. |
@@ -333,7 +326,7 @@ Expo, iOS target, single user, `APP_API_KEY`. **Four tabs: Home, Context, Connec
 | ID | Pri | Requirement |
 |---|---|---|
 | APP-4 | P0 | **Connected tools.** Every Composio toolkit visible to this user (CMP-6): name, icon, status (connected / needs auth / suggested), tool count. **Connect** opens the Connect Link from `POST /api/extensions/:id/connect`. Pull to refresh. Toolkits Otto used recently sort to the top. |
-| APP-5 | P1 | **Settings section** at the bottom: device (connected, last seen, state, battery), SMS number, server URL, `DEMO_MODE` indicator, and a Disconnect action per toolkit. |
+| APP-5 | P1 | **Settings section** at the bottom: device (connected, last seen, state, battery), server URL, `DEMO_MODE` indicator, and a Disconnect action per toolkit. |
 
 **Chat tab**
 
@@ -394,7 +387,7 @@ You extract action items from a wearable assistant's transcript.
 Return only JSON: {"items":[{"title":"","suggested_goal":"","toolkit_hint":"","confidence":0.0}]}
 An action item is something the USER committed to do or asked to have done, not something merely mentioned.
 "title" is under 8 words. "suggested_goal" is the instruction you would give an agent to do it.
-"toolkit_hint" is the most likely app (googlecalendar, gmail, shopify, ...) or empty.
+"toolkit_hint" is the most likely app (googlecalendar, whatsapp, ...) or empty.
 "confidence" is 0 to 1. If nothing qualifies return {"items":[]}.
 ```
 
@@ -504,7 +497,6 @@ POST   /api/chat                             -> { text }; streams SSE chat.delta
 
 # Streams and webhooks
 GET    /api/events                           -> SSE
-POST   /webhooks/sms                         -> inbound SMS (no bearer; signature check)
 GET    /connect/callback                     -> Composio redirect target; marks ConnectionRequest done, resumes task
 ```
 
@@ -541,7 +533,7 @@ interface Approval {
   summary: string; facts: Record<string, string>;
   args_hash: string;
   status: "pending" | "approved" | "denied" | "expired";
-  channel?: "sms" | "app"; expires_at: string; decided_at?: string;
+  channel?: "app"; expires_at: string; decided_at?: string;
 }
 
 interface ConnectionRequest {
@@ -648,7 +640,7 @@ If the user asks you to do something in the world, call run_task with a clear go
 and say "On it" or similar. Do not describe what you will do. Do not claim anything
 is done until you are told it is done.
 If something is ambiguous (which Sam, which date), ask one short question.
-If the user asks to confirm something and SMS is off, say "check the app to confirm."
+If the user asks to confirm something, say "check the app to confirm."
 User profile: {name}, timezone {tz}. Frequent contacts: {contacts}.
 Notes the user gave you: {user_memories}.
 ```
@@ -688,14 +680,14 @@ Order on stage: **S0 inside S1**, then S2, then S3 if it works. Total under 2 mi
 
 ### S0. Connect a tool live (the "do anything anywhere" beat)
 
-Not a separate scenario. It is the first 20 seconds of S1, and it only works if Gmail is **not** pre-connected.
+Not a separate scenario. It is the first 20 seconds of S1, and it only works if WhatsApp is **not** pre-connected.
 
-> Judge presses: "Set up a coffee chat with Sam next week and email him the invite."
+> Judge presses: "Set up a coffee chat with Sam next week and message him the invite on WhatsApp."
 
-- Discovery selects Google Calendar and Gmail (AG-7). Calendar is connected. Gmail is not.
-- Agent creates the calendar event (R1), then hits Gmail, gets needs-auth, raises a ConnectionRequest (CMP-4).
-- **Phone buzzes** with a Connect Link. User taps, signs in, returns. Agent retries the send, which is R2, so a second text arrives asking for YES. Reply YES. Email sends.
-- Pass: the app shows discovery, the connection wait, the approval wait, and success, in that order. Both texts arrive on stage.
+- Discovery selects Google Calendar and WhatsApp (AG-7). Calendar is connected. WhatsApp is not.
+- Agent creates the calendar event (R1), then hits WhatsApp, gets needs-auth, raises a ConnectionRequest (CMP-4).
+- **The app's "Needs you" card fills** with a Connect Link. User taps, signs in, returns. Agent retries the send, which is R2, so an approval card appears. Approve. The message sends.
+- Pass: the app shows discovery, the connection wait, the approval wait, and success, in that order.
 - What judges see: a system acquiring a capability it did not have thirty seconds ago, then asking permission before using it. That is the whole pitch in one interaction.
 
 ### S1. Coffee chat scheduling (Google Calendar) - build first
@@ -709,20 +701,21 @@ Optional warm-up (5 s, fast lane): "Am I free Thursday afternoon?" Otto answers 
 - Pass: event exists on the real calendar with the right attendee and duration; app shows each step; spoken confirmation states day and time.
 - Fallback: none. This must work live.
 
-### S2. Shopify store edit
+### S2. Send a message on someone's behalf (WhatsApp)
 
-> "Put the blue hoodie on sale for 20 percent off."
+> "Tell Sam I'm running ten minutes late."
 
-- Agent looks up the product (R0), updates price on a dev store (R2 because public), SMS approval, executes, speaks the result.
-- Pass: change visible on the live dev storefront after refresh; approval SMS arrives and is answered on stage.
-- Fallback: if the storefront banner edit is not feasible through Composio's Shopify toolkit, scope to price only. Banner is P2.
+- Agent resolves which Sam from the profile (AG-9), drafts the message, and stops: `WHATSAPP_SEND_MESSAGE` is R2 because it sends on the user's behalf (7.6 classifies it R2 with no override needed).
+- The approval card shows the recipient and the exact text. Approve, and it sends with exactly those arguments (AP-5).
+- Pass: the message arrives on the real device; the app shows the draft, the approval wait and success; on Deny nothing sends and Otto says so.
+- Replaces the Shopify store edit (D-25). Same R2 approval beat, no dev store to maintain, and it reuses the toolkit S0 already connects.
 
 ### S3. Food order - highest risk
 
 > "Order my usual from [restaurant]."
 
-- Agent builds a cart (R0/R1), requests approval with item, total, and address (R2), places the order on YES.
-- Pass: approval SMS shows correct facts; on YES the order is placed or reaches the final confirm screen; on NO nothing happens and the device says so.
+- Agent builds a cart (R0/R1), requests approval with item, total, and address (R2), places the order once approved.
+- Pass: the approval card shows correct facts; on Approve the order is placed or reaches the final confirm screen; on Deny nothing happens and the device says so.
 - **Known risk:** verify that Composio's catalog has a usable food-delivery toolkit (OD-5) before writing any S3 code. If not: (a) a Composio browser-automation toolkit against a logged-in session, (b) a different food service Composio does support, (c) a mock ordering tool registered as a custom Composio tool that behaves realistically and is labelled as a demo in the app. Do not let S3 consume effort S1 and S2 need.
 
 ---
@@ -738,7 +731,7 @@ If work has to be dropped, drop from the bottom.
 | **0. Talk to the device** | Hold the button, ask a question, hear the answer from the speaker. **Nothing else starts until this passes.** | DEV-1, VG-1 to VG-5, VG-13, FW-1 to FW-6 |
 | **1. Turns persist and delegate** | Transcription is persisted per turn, function tool routing works, and `run_task` returns so Otto says "on it". | VG-6, VG-8, VG-15, AG-1, DATA-1, DATA-2 |
 | **2. Composio wired** | Discovery returns Calendar tools and execute creates a real event through the gate. **S1 passes from the fake device.** | CMP-1, CMP-2, CMP-3, CMP-5, CMP-8, AP-1, AP-2, AG-2 to AG-5, AG-7 |
-| **3. Approvals and connections** | SMS approvals end to end. Connect Link end to end. **S0 + S1 pass from the fake device.** Home tab on real data: Needs you, recent activity, Task detail. | AP-3 to AP-6, AP-8, CMP-4, APP-1, APP-2, APP-7, APP-13, APP-15 |
+| **3. Approvals and connections** | Approvals end to end in the app. Connect Link end to end. **S0 + S1 pass from the fake device.** Home tab on real data: Needs you, recent activity, Task detail. | AP-3 to AP-6, AP-8, CMP-4, APP-1, APP-2, APP-7, APP-13, APP-15 |
 | **4. Real hardware** | **S1 passes from the physical device on the stage network path.** S2 passes from the fake device. Action items extract and are approvable from Home. Context tab (transcript + notes) and Connections tab are done. The fast lane answers "am I free at 3" in one turn. | FW-10, VG-14, NF-6, VG-16, CMP-9, ACT-1 to ACT-4, ACT-7, AG-12, DATA-4, DATA-6, APP-3, APP-6, APP-11, APP-4, CMP-6 |
 | **5. Remaining scenarios** | S2 passes from hardware. S3 per OD-5. Messy-data beat verified (AG-9). Chat tab streams with read tools. Native polish pass (APP-10). | AG-6, AG-9, AG-11, CHAT-1 to CHAT-3, CHAT-6, DATA-7, APP-12, APP-10 |
 | **6. P1 polish** | Started only once every P0 above passes. Backup videos recorded for S0/S1, S2, S3 and the Home action-item approve. | FW-7, AG-8, ACT-5, ACT-6, CHAT-4, CHAT-5, CHAT-7, APP-5, APP-14, DEVX-4 |
@@ -808,7 +801,7 @@ Every model call in the system is OpenAI. Say that in the pitch.
 
 **Rubric:** most creative, ambitious, genuinely useful agent that can do anything, showing what agents can do with the right tools.
 
-**How we satisfy it:** Composio is the entire action layer (CMP-1 to CMP-8). Discovery across 1,500+ apps per task (AG-7), managed auth via Connect Link delivered by SMS to a wearable user (CMP-4, S0), execution behind a human approval gate (AP-1). Every other entry will be a chat window. Ours is a button on a chest. Lead with that at their booth.
+**How we satisfy it:** Composio is the entire action layer (CMP-1 to CMP-8). Discovery across 1,500+ apps per task (AG-7), managed auth via a Connect Link raised by the agent mid-task and answered on the user's phone (CMP-4, S0), execution behind a human approval gate (AP-1). Every other entry will be a chat window. Ours is a button on a chest. Lead with that at their booth.
 
 **Do not pre-connect the S0 toolkit.** The live Connect Link is the demo. A pre-wired integration proves nothing.
 
@@ -826,10 +819,6 @@ Feed `docs.expo.dev/llms.txt` to the coding agent before starting the app.
 
 **How we satisfy it:** Speech is the messiest data there is. AG-9 (two Sams, mangled proper nouns, missing emails) plus the risk-tiered gate (AP-1) plus Connect Link recovery (CMP-4) are all decisions under uncertainty made visible in the app. Demo the ambiguity on purpose; do not hide it.
 
-### 11.5 Shopify (natural fit)
-
-S2 uses the Shopify toolkit against a dev store. Nothing extra to build.
-
 ### 11.6 Elastic: cut
 
 See D-12. The honest reason: it would not make the hack easier and it would not make voice faster. If a judge asks, say the memory layer is SQLite because retrieval on the voice path had to be under 5 ms and Realtime handles transcripts natively.
@@ -842,7 +831,7 @@ See D-12. The honest reason: it would not make the hack easier and it would not 
 |---|---|---|
 | D-1 | Wearable assistant, "do anything anywhere". Ambitious demo over track fitting. | Last year's winners had standout demos. |
 | D-2 | Expo mobile app, no web app. | Seamless next to a wearable; opens the Expo track. |
-| D-3 | Money and high-impact actions need SMS confirmation. | Safety, and a physical trust moment on stage. |
+| D-3 | Money and high-impact actions need explicit confirmation before they run. | Safety, and a visible trust moment on stage. Superseded in channel by D-24. |
 | D-4 | Feature work stops when the demo locks (Section 9, stage 7); what remains is pitch, Devpost and video. | Pitch quality decides. |
 | D-5 | Server is Node/TypeScript. | One language with the app, shared types. |
 | D-6 | Voice is OpenAI Realtime, audio to audio. | Chained transcribe-LLM-TTS would not meet NF-1. |
@@ -861,8 +850,11 @@ See D-12. The honest reason: it would not make the hack easier and it would not 
 | **D-19** | **App is four tabs: Home, Context, Connections, Chat.** Activity feed folds into Home; Task detail is a pushed screen. | Matches the team's UI plan. Fewer top-level surfaces, each with one job. |
 | **D-20** | **Action items are extracted per turn by the cheapest OpenAI model that returns clean JSON, off the voice path, and approved with one tap. Approval creates a normal Task.** | The Home tab needs something to show that the device is paying attention between commands. Routing approval through `run_task` means the risk gate and step log apply unchanged (AG-12). |
 | **D-21** | **The Chat tab is a read-mostly context agent. Its only write is `run_task`.** | Talking to Otto about your day is a memory feature, not an action feature. Keeping Composio out of it preserves AG-3 and keeps the chat fast. |
-| **D-22** | **When SMS is off or fails, the Home tab is the confirmation surface and Otto says so aloud.** | The demo works with or without a working SMS number. One code path decides which sentence Otto speaks. |
+| **D-22** | **The Home tab is the confirmation surface and Otto says so aloud.** | Generalised by D-24: there is now only one channel, so Otto always says "check the app to confirm." |
 | **D-23** | **Fast lane: two read-only Google Calendar tools registered directly on the Realtime session, executed by the gateway through the gate, 2.5 s timeout, escalation to `run_task`. Realtime's remote MCP feature stays off. Closes OD-8 with the precise version.** | OD-8 conflated "tools on the voice agent" with "tools the gateway does not execute." Function tools are executed by us, so nothing bypasses the gate. The real limit is that the voice model cannot speak during an outstanding call, so the lane is read-only, capped at two, and timed out. Calendar is the only one the demo needs. If it is flaky, delete it from CMP-9 and nothing else changes. |
+| **D-24** | **The SMS layer is cut entirely. Approvals and Connect Links are confirmed in the app only.** AP-7 removed, `POST /webhooks/sms` removed from 7.2, `Approval.channel` narrowed to `"app"`, all `SMS_*` and Twilio env removed, OD-2 closed without an answer. | Provisioning and verifying a number, plus inbound webhook debugging, was more setup than the beat was worth. If Otto ever needs to reach a phone, it does it as a *task* through the WhatsApp toolkit, which is a capability rather than infrastructure. Cost, stated plainly: the "phone buzzes" moment is gone, so APP-1 is now the entire trust surface and is the screen judges will scrutinise. |
+| **D-25** | **Shopify is cut. S2 becomes "send a WhatsApp message on the user's behalf".** | Shopify needed a dev store, a product catalogue and a storefront to refresh, all to demonstrate an R2 approval that WhatsApp demonstrates with no extra setup. WhatsApp is already the toolkit S0 connects live, so S0 and S2 now reinforce one interaction instead of spreading across three vendors. The Shopify track is dropped; it was listed as "no extra work", which stopped being true. |
+| **D-26** | **Discovery picks among the toolkits the user has set up, and loads a curated tool subset per toolkit. Composio's tool search is a best-effort hint only.** | Measured against the live catalogue: `tools.getRawComposioTools({search})` is AND-keyword matching over tool text, not semantic - "free busy calendar" returns exactly the right tools, "free slot week" returns nothing because "week" matches no tool, and a full goal sentence always returns zero. When a search resolves to one toolkit the SDK sends `scopes: null` and the API rejects it, so a search can throw as well as come back empty. `toolkits.get({search})` ignores `search` entirely - the same six toolkits come back for any term. A bare `limit` truncates a toolkit's tools alphabetically, so asking for five Google Calendar tools yields five `*_ACL_*` tools. What is genuinely dynamic, and all AG-7 should claim, is which toolkit gets chosen and the fact that an unconnected one triggers a live Connect Link. |
 
 ---
 
@@ -870,10 +862,9 @@ See D-12. The honest reason: it would not make the hack easier and it would not 
 
 | ID | Question | Recommended default | Blocks |
 |---|---|---|---|
-| OD-2 | SMS provider: Twilio or Linq? | Try Linq (sponsor) first. If inbound webhooks are not working, Twilio. **Provision the number before anything else in stage 3**; verification is not instant. | AP-3, stage 3 |
 | OD-5 | How does S3 execute? | Check Composio's catalog for a food-delivery toolkit first. Then (a) browser toolkit, (b) supported alternative service, (c) mock custom tool labelled as demo. | S3, stage 5 |
 | OD-9 | Hosting: laptop + cloudflared, or Railway? | cloudflared. Zero deploy step, and the laptop is on stage anyway. Have the Railway config ready as a fallback if the tunnel is flaky on the venue uplink. | NF-6, stage 4 |
-| ~~OD-1, OD-3, OD-4, OD-6, OD-7, OD-8~~ | | Resolved: D-10, D-14, D-13, Section 11, D-18, D-23. | |
+| ~~OD-1 to OD-4, OD-6 to OD-8~~ | | Resolved or removed: D-10, D-14, D-13, Section 11, D-18, D-23, D-24. | |
 
 ---
 
@@ -884,7 +875,7 @@ See D-12. The honest reason: it would not make the hack easier and it would not 
 | Firmware + hardware (FW) | Ayaan | Vibhor |
 | Voice Gateway (VG) | Vibhor | Ayaan |
 | Task Agent + Composio (AG, CMP) | Alison | Vibhor |
-| Approvals + SMS (AP) | Alison | frontend 2 |
+| Approvals (AP) | Alison | frontend 2 |
 | Action items + Context agent (ACT, CHAT) | Vibhor, after VG P0s pass | Alison |
 | Mobile app (APP) | frontend 1, frontend 2 | |
 | Demo script, rehearsals, judge check-ins | Alison owns it throughout; everyone once the demo locks | |
@@ -908,8 +899,10 @@ Judge check-ins: OpenAI, Composio and Expo booths early, and once more after sta
 | TLS on ESP32 eats memory | Medium | Test `wss://` early; tiny JSON; no base64 on device |
 | Composio SDK shape differs from memory | High | CMP-8: read docs before coding; pin version; ask at booth |
 | Composio has no food-delivery toolkit | High | Resolve OD-5 before any S3 code; mock fallback labelled honestly |
+| WhatsApp Business sending needs a template or an open 24-hour window | Medium | Verify a real send to the demo number before relying on S2; if templates block it, S2 falls back to another connected toolkit and S0 keeps the connect beat |
+| Composio API key lacks `connected_accounts` write | High | CMP-4 and all of S0 need it. Verified as part of stage 2, not discovered on stage |
 | Connect Link redirect does not return to the app cleanly | Medium | The link can complete in Safari; the app polls `/api/connections` and the server resumes on Composio's callback regardless of where the browser lands |
-| SMS delivery delay on stage | Medium | AP-6 in-app approve as fallback; test on the stage hotspot |
+| The app is the only confirmation surface, so a phone or SSE failure blocks every R2 action | Medium | `GET /api/home` re-fetches the pending list on foreground, so a dropped SSE connection self-heals; approvals also expire rather than hanging (AP-4) |
 | Realtime session left open, surprise bill | Medium | VG-13, NF-7, spending cap |
 | Realtime event names differ from this spec | Medium | Verify against current docs before coding VG; 7.5 is the last-known shape |
 | Scope creep late in the build | High | Priority rule in Section 0; D-4; the Section 9 stage order |
@@ -926,7 +919,7 @@ Judge check-ins: OpenAI, Composio and Expo booths early, and once more after sta
 **Demo first, slides after.** 90 to 120 seconds, three beats, then two minutes of explanation.
 
 1. Hand the device to a judge. S1 with S0 inside it: discovery, Connect Link buzz, ambiguity question, approval buzz, done. (60 s)
-2. S2 from your own chest: Shopify price change with SMS approval, refresh the storefront. (30 s)
+2. S2 from your own chest: "Tell Sam I'm running ten minutes late." Approve the card, the message lands. (30 s)
 3. S3 if it passed twice in rehearsal. Otherwise the S3 backup video. (30 s)
 
 **The one sentence:** "Everyone's building AI that listens. Otto does something about it."
@@ -935,19 +928,21 @@ Judge check-ins: OpenAI, Composio and Expo booths early, and once more after sta
 
 **Per-track opener:**
 - OpenAI: "Every model call is OpenAI. Realtime for the ear, Responses for the hands, and Codex built about a third of the repo."
-- Composio: "It's a button on a chest with 1,500 apps behind it, and it texts you a link when it needs one it doesn't have yet."
+- Composio: "It's a button on a chest with 1,500 apps behind it, and when it needs one it hasn't connected yet, it asks you mid-task and keeps going."
 - Expo: "The phone is where the agent asks permission. That screen had to feel native, because you're tapping it mid-conversation."
 - Rox: "Speech is the messiest data in any company. Ours knows when it misheard you."
 - Finalists: "We were annoyed that thoughts die in hallways. So we made a button."
 
 **Devpost checklist:**
 - [ ] Otto: one-liner, 3 screenshots (Home with an action item, the Needs you card, device on a person)
-- [ ] 60 to 90 s video: the three beats, no slides, captions for what the SMS says
+- [ ] 60 to 90 s video: the three beats, no slides, captions for what the approval card says
 - [ ] Architecture diagram from Section 3
 - [ ] "How we built it": two-layer brain, why approvals sit before Composio, why push-to-talk
 - [ ] Codex section from `docs/codex-evidence.md` with PR links (DEVX-3)
-- [ ] Tracks entered: OpenAI, Composio, Expo, Rox, Shopify, Finalists
+- [ ] Tracks entered: OpenAI, Composio, Expo, Rox, Finalists
 - [ ] Honest "what's mocked" line if S3 uses the mock tool
+
+**Answer prepared for "why no SMS?":** "Approving something is a decision, and decisions belong on a screen where you can see exactly what you're agreeing to. The card shows the recipient and the literal text before it sends."
 
 **Answer prepared for the privacy question:** "Otto only hears you when you press the button. Every word it heard is in the Context tab, and you can delete any of it. And it asks before it acts."
 
@@ -955,6 +950,19 @@ Judge check-ins: OpenAI, Composio and Expo booths early, and once more after sta
 
 ## 17. Changelog
 
+- **1.4.0**: SMS cut entirely (D-24). The app is the only confirmation surface:
+  AP-3 and AP-4 rewritten around `POST /api/approvals/:id/decision`, AP-6
+  promoted to sole channel, AP-7 removed, APP-1 restated as the whole trust
+  story. **Section 7 changed:** `POST /webhooks/sms` removed from 7.2 and
+  `Approval.channel` narrowed to `"app"`. All `SMS_*` and Twilio variables
+  removed from 5.2; OD-2 closed without an answer. Shopify cut and S2 replaced
+  by a WhatsApp send on the user's behalf (D-25); Shopify track dropped and
+  Section 11.5 removed. S0 now connects WhatsApp rather than Gmail. CMP-1
+  rewritten: discovery selects toolkits and loads a curated tool subset, because
+  tool-level semantic search does not work in the live catalogue (D-26). CMP-2
+  notes that a Connect Link needs an API key with `connected_accounts` write
+  access. New risks for WhatsApp template sending, the read-only key, and the app
+  being a single point of failure for approvals.
 - **1.3.0**: All project scheduling removed; the spec is task-based. Section 9 is
   now a dependency order of nine stages with a "done when" check each, replacing
   the clock-slot table. Cut rules restated against stages rather than times.

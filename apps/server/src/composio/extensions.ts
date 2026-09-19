@@ -1,47 +1,73 @@
 // CMP-6. Toolkit list with connection status for this user, so APP-4 has real
-// data. Until the SDK is wired (CMP-8), the demo toolkits are returned as
-// `suggested` so the Connections tab is never empty during development.
+// data. Reads only; the connect link itself is CMP-4 in connect.ts.
 
 import type { Extension } from "@otto/shared";
-import { env } from "../env";
-import { logger } from "../log";
+import { activeToolkitSlugs, composio, composioConfigured, items, log } from "./client";
+import { CURATED_TOOLS } from "./toolkits";
 
-const log = logger("composio");
+/** Shown when Composio is unconfigured so the Connections tab is never empty. */
+const PLACEHOLDERS: Extension[] = Object.keys(CURATED_TOOLS).map((slug) => ({
+  id: slug,
+  name: slug,
+  description: "Composio is not configured (COMPOSIO_API_KEY).",
+  status: "suggested",
+  tool_count: CURATED_TOOLS[slug]!.length,
+}));
 
-export const composioConfigured = () => Boolean(env.composioApiKey);
-
-// S0 depends on Gmail NOT being connected (D-16). Pre-connect Google Calendar
-// and Shopify only (CMP-2).
-const DEMO_TOOLKITS: Extension[] = [
-  { id: "googlecalendar", name: "Google Calendar", description: "Events, free/busy, invites.", status: "suggested", tool_count: 0 },
-  { id: "gmail", name: "Gmail", description: "Send and read mail.", status: "suggested", tool_count: 0 },
-  { id: "shopify", name: "Shopify", description: "Products, prices, orders.", status: "suggested", tool_count: 0 },
-];
-
-/**
- * [TODO CMP-6] Replace with a Composio toolkit listing for COMPOSIO_USER_ID,
- * mapping connected accounts to `connected`, known-but-unauthed to `needs_auth`,
- * and the rest to `suggested`. Sort toolkits Otto used recently to the top (APP-4).
- */
 export async function listExtensions(): Promise<Extension[]> {
-  if (!composioConfigured()) {
-    log.warn("COMPOSIO_API_KEY unset, returning demo toolkit list");
+  if (!composioConfigured()) return PLACEHOLDERS;
+
+  try {
+    const [configs, connected] = await Promise.all([
+      composio().authConfigs.list({} as never),
+      activeToolkitSlugs(),
+    ]);
+
+    // An auth config exists for every toolkit someone set up in the dashboard.
+    // With an account it is connected; without one it needs auth - which is
+    // exactly the state S0 depends on (D-16).
+    const out = items<{ id?: string; toolkit?: { slug?: string } | string; name?: string }>(configs)
+      .map((c): Extension => {
+        const slug = slugOf(c.toolkit) || (c.name ?? "").toLowerCase();
+        return {
+          id: slug,
+          name: pretty(slug),
+          description: connected.has(slug)
+            ? "Connected. Otto can use this."
+            : "Set up but not connected yet. Otto will ask when it needs this.",
+          status: connected.has(slug) ? "connected" : "needs_auth",
+          tool_count: CURATED_TOOLS[slug]?.length ?? 0,
+        };
+      })
+      .filter((e) => e.id);
+
+    // Curated toolkits with no auth config at all are still worth surfacing.
+    for (const slug of Object.keys(CURATED_TOOLS)) {
+      if (out.some((e) => e.id === slug)) continue;
+      out.push({
+        id: slug,
+        name: pretty(slug),
+        description: "No auth config yet. Create one in the Composio dashboard.",
+        status: "suggested",
+        tool_count: CURATED_TOOLS[slug]!.length,
+      });
+    }
+
+    return out;
+  } catch (err) {
+    log.warn("extension listing failed", {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return PLACEHOLDERS;
   }
-  return DEMO_TOOLKITS;
 }
 
-/**
- * [TODO CMP-4] Create a Composio Connect Link for this toolkit, redirecting to
- * `${PUBLIC_BASE_URL}/connect/callback?toolkit=<id>`. Verify the SDK method name
- * against docs.composio.dev first (CMP-8).
- */
-export async function createConnectLink(toolkitId: string): Promise<string | undefined> {
-  if (!composioConfigured()) return undefined;
-  log.warn("connect link not implemented yet", { toolkit: toolkitId });
-  return undefined;
-}
+const slugOf = (tk: { slug?: string } | string | undefined): string =>
+  (typeof tk === "string" ? tk : tk?.slug ?? "").toLowerCase();
 
-/** [TODO APP-5, P1] Disconnect a toolkit for this user. */
-export async function disconnectToolkit(toolkitId: string): Promise<void> {
-  log.warn("disconnect not implemented yet", { toolkit: toolkitId });
-}
+const NAMES: Record<string, string> = {
+  googlecalendar: "Google Calendar",
+  whatsapp: "WhatsApp",
+  gmail: "Gmail",
+};
+const pretty = (slug: string) => NAMES[slug] ?? slug.replace(/^\w/, (c) => c.toUpperCase());

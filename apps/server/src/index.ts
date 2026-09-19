@@ -5,7 +5,7 @@
 import { buildApp } from "./api/server";
 import { attachDeviceGateway } from "./gateway/device";
 import { expireStaleApprovals } from "./store";
-import { env, smsEnabled } from "./env";
+import { env } from "./env";
 import { logger } from "./log";
 
 const log = logger("server");
@@ -28,7 +28,7 @@ log.info("listening", {
   port: env.port,
   base_url: env.publicBaseUrl,
   demo_mode: env.demoMode,
-  sms: smsEnabled ? env.smsProvider : "off (Home tab is the confirmation surface, D-22)",
+  confirmations: "app only (D-24)",
   realtime_model: env.realtimeModel,
 });
 

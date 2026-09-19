@@ -3,7 +3,6 @@
 // (Section 3, latency posture, D-12).
 
 import type { Profile, Turn } from "@otto/shared";
-import { smsEnabled } from "../env";
 import { fastLaneAvailable } from "../composio/fastlane";
 
 export function buildInstructions(profile: Profile, userMemories: string[], recent: Turn[]): string {
@@ -22,12 +21,9 @@ export function buildInstructions(profile: Profile, userMemories: string[], rece
     "If something is ambiguous (which Sam, which date), ask one short question.",
   ];
 
-  // D-22: one code path decides which sentence Otto speaks.
-  lines.push(
-    smsEnabled
-      ? 'If the user asks to confirm something, say "I\'ve texted you to confirm."'
-      : 'If the user asks to confirm something, say "check the app to confirm."',
-  );
+  // D-24: the app is the only confirmation surface, so there is only one
+  // sentence Otto can honestly say here.
+  lines.push('If the user asks to confirm something, say "check the app to confirm."');
 
   // VG-17: exactly these two sentences, and only while the lane exists (CMP-9).
   if (fastLaneAvailable()) {

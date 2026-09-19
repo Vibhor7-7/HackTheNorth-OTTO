@@ -7,6 +7,7 @@
 // fall back to run_task with no other change anywhere.
 
 import type { RiskTier } from "@otto/shared";
+import { composioConfigured } from "./client";
 
 export interface FastLaneTool {
   /** Realtime function-tool name (Section 7.4). */
@@ -32,7 +33,10 @@ export const FAST_LANE: Record<string, FastLaneTool> = {
   },
 };
 
-// CMP-8: verify both slugs against docs.composio.dev before wiring execute.ts.
-// Until CMP-1/CMP-3 land, the gateway sees an unavailable lane and escalates
-// every calendar question to run_task, which is the documented fallback.
-export const fastLaneAvailable = () => false;
+// Both slugs verified present in the live Google Calendar toolkit (CMP-8).
+//
+// The lane is only offered when Composio is configured. If it misbehaves on the
+// stage network, empty FAST_LANE above and calendar questions fall back to
+// run_task with no other change anywhere (Section 9 cut rule).
+export const fastLaneAvailable = (): boolean =>
+  composioConfigured() && Object.keys(FAST_LANE).length > 0;
