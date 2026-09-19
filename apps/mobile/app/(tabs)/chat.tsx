@@ -532,7 +532,7 @@ export default function ChatScreen() {
                 quiet
                 label="Undo"
                 onPress={async () => {
-                  await otto.deleteMemory(savedMemory);
+                  await otto.deleteMemory(savedMemory).catch(() => {});
                   setSavedMemory(null);
                 }}
               />
@@ -719,7 +719,7 @@ export default function ChatScreen() {
               onPress={
                 clearOpen
                   ? async () => {
-                      await otto.clearChat();
+                      await otto.clearChat().catch(() => {});
                       setClearOpen(false);
                       setError("");
                     }

@@ -286,8 +286,12 @@ export default function ContextScreen() {
               disabled={!note.trim()}
               icon="plus"
               onPress={async () => {
-                await otto.addMemory(note.trim());
-                setNote("");
+                try {
+                  await otto.addMemory(note.trim());
+                  setNote("");
+                } catch {
+                  // Keep the text so the note is not lost when the server is down.
+                }
               }}
             />
             <Section title="Your notes" aside={String(notes.length)} />

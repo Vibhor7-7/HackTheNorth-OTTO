@@ -196,7 +196,7 @@ export default function Settings() {
                   quiet
                   icon="rotate-ccw"
                   onPress={async () => {
-                    await otto.reset(scenario.id);
+                    await otto.reset(scenario.id).catch(() => {});
                     router.replace("/");
                   }}
                 />

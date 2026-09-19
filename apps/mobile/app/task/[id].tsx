@@ -257,7 +257,7 @@ export default function TaskDetail() {
                 disabled={state.network !== "online"}
                 onPress={async () => {
                   await Haptics.selectionAsync();
-                  await otto.answerQuestion(id, "Sam Chen");
+                  await otto.answerQuestion(id, "Sam Chen").catch(() => {});
                 }}
               />
               <View style={{ height: 10 }} />
@@ -267,7 +267,7 @@ export default function TaskDetail() {
                 disabled={state.network !== "online"}
                 onPress={async () => {
                   await Haptics.selectionAsync();
-                  await otto.answerQuestion(id, "Sam Patel");
+                  await otto.answerQuestion(id, "Sam Patel").catch(() => {});
                 }}
               />
             </View>

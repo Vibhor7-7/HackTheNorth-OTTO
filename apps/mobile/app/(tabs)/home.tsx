@@ -46,9 +46,14 @@ export default function Home() {
   const [selected, setSelected] = useState(6);
   useEffect(() => {
     let live = true;
-    void otto.getHome().then((value) => {
-      if (live) setHome(value);
-    });
+    void otto.getHome()
+      .then((value) => {
+        if (live) setHome(value);
+      })
+      // Offline is a state this screen already renders - NetworkBanner says so and
+      // the cards fall back to SSE state. An unhandled rejection here instead threw
+      // a red box over the whole app the moment the server was unreachable.
+      .catch(() => {});
     return () => {
       live = false;
     };
@@ -131,6 +136,9 @@ export default function Home() {
               setRefreshing(true);
               try {
                 setHome(await otto.getHome());
+              } catch {
+                // Pull-to-refresh against a server that is down is not an error
+                // worth a crash; the banner already says we are offline.
               } finally {
                 setRefreshing(false);
               }

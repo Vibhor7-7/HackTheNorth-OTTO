@@ -87,6 +87,8 @@ export default function ConnectionsScreen() {
               setRefreshing(true);
               try {
                 await otto.getHome();
+              } catch {
+                // Same as Home: offline is shown, not thrown.
               } finally {
                 setRefreshing(false);
               }
@@ -166,7 +168,9 @@ export default function ConnectionsScreen() {
                   <Button
                     label="Disconnect"
                     destructive
-                    onPress={() => otto.disconnect(tool.id)}
+                    onPress={() => {
+                      void otto.disconnect(tool.id).catch(() => {});
+                    }}
                   />
                 </View>
               )}

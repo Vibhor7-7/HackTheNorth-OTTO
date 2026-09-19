@@ -270,8 +270,12 @@ export default function TasksScreen() {
                             await Haptics.impactAsync(
                               Haptics.ImpactFeedbackStyle.Medium,
                             );
-                            const id = await otto.doAction(item.id);
-                            openTask(id);
+                            // A server hiccup here used to throw a red box over
+                            // the app. Offline is already on the banner; only
+                            // navigate if the task actually started.
+                            try {
+                              openTask(await otto.doAction(item.id));
+                            } catch {}
                           }}
                         />
                       </View>
@@ -279,7 +283,9 @@ export default function TasksScreen() {
                         <Button
                           quiet
                           label="Dismiss"
-                          onPress={() => otto.dismissAction(item.id)}
+                          onPress={() => {
+                            void otto.dismissAction(item.id).catch(() => {});
+                          }}
                         />
                       </View>
                     </View>
