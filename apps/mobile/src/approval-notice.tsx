@@ -6,6 +6,7 @@ import {
   StyleSheet,
   View,
   useWindowDimensions,
+  Keyboard,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router, usePathname } from "expo-router";
@@ -85,6 +86,7 @@ export function ApprovalNotice() {
     }
   }, [pathname, noticeId]);
   const dismiss = () => {
+    Keyboard.dismiss();
     setNoticeId(undefined);
     setExpandedId(undefined);
   };
@@ -152,7 +154,7 @@ export function ApprovalNotice() {
         visible={expandedId === approval.id}
         transparent
         animationType="none"
-        onRequestClose={() => setExpandedId(undefined)}
+        onRequestClose={() => { Keyboard.dismiss(); setExpandedId(undefined); }}
       >
         <View
           style={[

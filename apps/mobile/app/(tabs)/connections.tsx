@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import {
+  Keyboard,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -58,6 +59,13 @@ export default function ConnectionsScreen() {
   const available = tools.filter((t) => t.status === "suggested");
   const open = (id: string) =>
     router.push({ pathname: "/connect/[id]", params: { id } });
+  // A Modal dismissed while the keyboard is still up can leave iOS with a dead
+  // touch layer: the sheet is gone, the keyboard is gone, and nothing scrolls
+  // until the app is backgrounded. Put the keyboard away first, every time.
+  const closeSheet = () => {
+    Keyboard.dismiss();
+    setSheet(null);
+  };
   const add = async () => {
     const value = validateMcp(name, url);
     if (mcps.some((m) => m.url === value.url))
@@ -74,7 +82,7 @@ export default function ConnectionsScreen() {
     setMcps(next);
     setName("");
     setUrl("");
-    setSheet(null);
+    closeSheet();
   };
   return (
     <View style={[s.page, { paddingTop: insets.top }]}>
@@ -313,7 +321,7 @@ export default function ConnectionsScreen() {
         visible={sheet !== null}
         animationType="slide"
         transparent
-        onRequestClose={() => setSheet(null)}
+        onRequestClose={() => closeSheet()}
       >
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -326,7 +334,7 @@ export default function ConnectionsScreen() {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Close sheet"
-            onPress={() => setSheet(null)}
+            onPress={() => closeSheet()}
             style={{ flex: 1 }}
           />
           <View
@@ -358,7 +366,7 @@ export default function ConnectionsScreen() {
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel="Close"
-                  onPress={() => setSheet(null)}
+                  onPress={() => closeSheet()}
                   style={{
                     minWidth: 44,
                     minHeight: 44,
@@ -427,7 +435,7 @@ export default function ConnectionsScreen() {
                       ? "Every tool call goes through the approval gate before it runs."
                       : "This preview simulates discovery and sign-in. No Composio requests are sent."}
                   </Copy>
-                  <Button label="Got it" onPress={() => setSheet(null)} />
+                  <Button label="Got it" onPress={() => closeSheet()} />
                 </>
               )}
             </ScrollView>

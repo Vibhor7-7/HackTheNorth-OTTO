@@ -223,6 +223,7 @@ export default function ChatScreen() {
     if (id) await otto.selectChat(id);
     else await otto.newChat();
     setHistoryOpen(false);
+    Keyboard.dismiss();
     setMemoryDraft(null);
     setClearOpen(false);
     setDraft("");
@@ -239,6 +240,7 @@ export default function ChatScreen() {
         otto.getSnapshot().memories.find((m) => !previous.has(m.id))?.id ??
           null,
       );
+      Keyboard.dismiss();
       setMemoryDraft(null);
       setDraft("");
     } catch (e) {
@@ -674,6 +676,7 @@ export default function ChatScreen() {
         visible={clearOpen || memoryDraft !== null}
         animationType="fade"
         onRequestClose={() => {
+          Keyboard.dismiss();
           setClearOpen(false);
           setMemoryDraft(null);
         }}
@@ -731,6 +734,7 @@ export default function ChatScreen() {
               label="Cancel"
               onPress={() => {
                 setClearOpen(false);
+                Keyboard.dismiss();
                 setMemoryDraft(null);
               }}
             />
