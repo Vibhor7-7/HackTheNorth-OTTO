@@ -61,6 +61,21 @@ export function ApprovalNotice() {
       Date.parse(item.expires_at) > now,
   );
   const id = approval?.id;
+  // The expanded card is a React Native Modal. On iOS a Modal that is unmounted
+  // while visible leaves its window attached above every screen, and nothing in
+  // the app responds to touch again until it is killed. So the Modal below is
+  // always mounted: it is looked up separately, in any status, and it closes
+  // itself (visible -> false, then onDismiss clears the id) when the approval
+  // resolves, expires, or the user navigates to the Urgent screen.
+  const expanded = state.approvals.find((item) => item.id === expandedId);
+  const onDetailScreen =
+    pathname === "/urgent" ||
+    (expanded ? pathname === `/approval/${expanded.id}` : false);
+  const modalVisible =
+    !!expanded &&
+    expanded.status === "pending" &&
+    Date.parse(expanded.expires_at) > now &&
+    !onDetailScreen;
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
@@ -90,179 +105,194 @@ export function ApprovalNotice() {
     setNoticeId(undefined);
     setExpandedId(undefined);
   };
-  if (
-    !approval ||
-    pathname === "/urgent" ||
-    pathname === `/approval/${approval.id}`
-  )
-    return null;
+  const showBanner =
+    !!approval &&
+    pathname !== "/urgent" &&
+    pathname !== `/approval/${approval.id}`;
   return (
-    <View
-      pointerEvents="box-none"
-      style={[StyleSheet.absoluteFill, { zIndex: 1000 }]}
-    >
-      <View
-        pointerEvents="box-none"
-        style={{
-          position: "absolute",
-          top: insets.top + 8,
-          left: 16,
-          right: 16,
-          maxWidth: 600,
-          alignSelf: "center",
-        }}
-      >
-        <GlassChrome interactive style={{ borderRadius: 22 }}>
+    <>
+      {showBanner && approval && (
+        <View
+          pointerEvents="box-none"
+          style={[StyleSheet.absoluteFill, { zIndex: 1000 }]}
+        >
           <View
+            pointerEvents="box-none"
             style={{
-              flexDirection: "row",
-              alignItems: "center",
-              padding: 14,
-              gap: 10,
+              position: "absolute",
+              top: insets.top + 8,
+              left: 16,
+              right: 16,
+              maxWidth: 600,
+              alignSelf: "center",
             }}
           >
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`Review approval: ${approval.summary}`}
-              onPress={() => setExpandedId(approval.id)}
-              style={{ flex: 1, minHeight: 44 }}
-            >
-              <Copy
-                style={{ fontSize: 14, fontWeight: "600", color: c.accent }}
+            <GlassChrome interactive style={{ borderRadius: 22 }}>
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  padding: 14,
+                  gap: 10,
+                }}
               >
-                {isLive ? "Otto · Needs you" : "Otto · Demo approval"}
-              </Copy>
-              <Copy
-                numberOfLines={1}
-                style={{ marginTop: 3, fontWeight: "500" }}
-              >
-                {approval.summary}
-              </Copy>
-            </Pressable>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Dismiss approval notification"
-              onPress={dismiss}
-              style={styles.close}
-            >
-              <Feather name="x" size={20} color={c.muted} />
-            </Pressable>
-          </View>
-        </GlassChrome>
-      </View>
-      <Modal
-        visible={expandedId === approval.id}
-        transparent
-        animationType="none"
-        onRequestClose={() => { Keyboard.dismiss(); setExpandedId(undefined); }}
-      >
-        <View
-          style={[
-            styles.backdrop,
-            { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 16 },
-          ]}
-        >
-          <Pressable
-            accessibilityLabel="Close approval"
-            onPress={() => setExpandedId(undefined)}
-            style={StyleSheet.absoluteFill}
-          />
-          <View
-            accessibilityViewIsModal
-            style={[
-              styles.sheet,
-              { maxHeight: height - insets.top - insets.bottom - 48 },
-            ]}
-          >
-            <View style={styles.heading}>
-              <Copy style={{ fontWeight: "600", flex: 1 }}>
-                {isLive ? "Otto · Needs you" : "Otto · Demo approval"}
-              </Copy>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Close approval"
-                onPress={() => setExpandedId(undefined)}
-                style={styles.close}
-              >
-                <Feather name="x" size={22} color={c.text} />
-              </Pressable>
-            </View>
-            <ScrollView contentContainerStyle={{ padding: 20 }}>
-              <Copy style={{ fontSize: 24, lineHeight: 30, fontWeight: "700" }}>
-                {approval.summary}
-              </Copy>
-              <Copy style={{ marginTop: 10, color: c.warning }}>
-                {timeRemaining(approval.expires_at, now)}
-              </Copy>
-              <View style={{ marginTop: 20, gap: 16 }}>
-                {Object.entries(approval.facts).map(([key, value]) => (
-                  <View key={key}>
-                    <Copy style={{ color: c.muted, fontSize: 14 }}>{key}</Copy>
-                    <Copy
-                      selectable
-                      style={{ marginTop: 3, fontWeight: "500" }}
-                    >
-                      {value}
-                    </Copy>
-                  </View>
-                ))}
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Review approval: ${approval.summary}`}
+                  onPress={() => setExpandedId(approval.id)}
+                  style={{ flex: 1, minHeight: 44 }}
+                >
+                  <Copy
+                    style={{ fontSize: 14, fontWeight: "600", color: c.accent }}
+                  >
+                    {isLive ? "Otto · Needs you" : "Otto · Demo approval"}
+                  </Copy>
+                  <Copy
+                    numberOfLines={1}
+                    style={{ marginTop: 3, fontWeight: "500" }}
+                  >
+                    {approval.summary}
+                  </Copy>
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Dismiss approval notification"
+                  onPress={dismiss}
+                  style={styles.close}
+                >
+                  <Feather name="x" size={20} color={c.muted} />
+                </Pressable>
               </View>
-              <Copy style={{ color: c.muted, marginTop: 20, fontSize: 14 }}>
-                {isLive
-                  ? "Approve and exactly this runs. Deny and nothing happens."
-                  : "This action is simulated. No real message, order, or charge is sent."}
-              </Copy>
-            </ScrollView>
-            <View
-              style={{
-                padding: 20,
-                borderTopWidth: StyleSheet.hairlineWidth,
-                borderTopColor: c.line,
-                gap: 10,
-              }}
-            >
-              <Button
-                label="Approve"
-                disabled={
-                  state.network !== "online" ||
-                  Date.parse(approval.expires_at) <= now
-                }
-                onPress={async () => {
-                  await decideApproval(otto, approval.id, "approve");
-                  void Haptics.notificationAsync(
-                    Haptics.NotificationFeedbackType.Success,
-                  );
-                  setExpandedId(undefined);
-                }}
-              />
-              <Button
-                destructive
-                label="Deny"
-                disabled={
-                  state.network !== "online" ||
-                  Date.parse(approval.expires_at) <= now
-                }
-                onPress={async () => {
-                  await decideApproval(otto, approval.id, "deny");
-                  void Haptics.notificationAsync(
-                    Haptics.NotificationFeedbackType.Warning,
-                  );
-                  setExpandedId(undefined);
-                }}
-              />
-              <Button
-                quiet
-                label="Open Urgent"
-                onPress={() => {
-                  dismiss();
-                  router.push("/urgent");
-                }}
-              />
-            </View>
+            </GlassChrome>
           </View>
         </View>
+      )}
+      <Modal
+        visible={modalVisible}
+        transparent
+        animationType="none"
+        onRequestClose={() => {
+          Keyboard.dismiss();
+          setExpandedId(undefined);
+        }}
+        onDismiss={() => setExpandedId(undefined)}
+      >
+        {expanded && (
+          <View
+            style={[
+              styles.backdrop,
+              {
+                paddingTop: insets.top + 16,
+                paddingBottom: insets.bottom + 16,
+              },
+            ]}
+          >
+            <Pressable
+              accessibilityLabel="Close approval"
+              onPress={() => setExpandedId(undefined)}
+              style={StyleSheet.absoluteFill}
+            />
+            <View
+              accessibilityViewIsModal
+              style={[
+                styles.sheet,
+                { maxHeight: height - insets.top - insets.bottom - 48 },
+              ]}
+            >
+              <View style={styles.heading}>
+                <Copy style={{ fontWeight: "600", flex: 1 }}>
+                  {isLive ? "Otto · Needs you" : "Otto · Demo approval"}
+                </Copy>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Close approval"
+                  onPress={() => setExpandedId(undefined)}
+                  style={styles.close}
+                >
+                  <Feather name="x" size={22} color={c.text} />
+                </Pressable>
+              </View>
+              <ScrollView contentContainerStyle={{ padding: 20 }}>
+                <Copy
+                  style={{ fontSize: 24, lineHeight: 30, fontWeight: "700" }}
+                >
+                  {expanded.summary}
+                </Copy>
+                <Copy style={{ marginTop: 10, color: c.warning }}>
+                  {timeRemaining(expanded.expires_at, now)}
+                </Copy>
+                <View style={{ marginTop: 20, gap: 16 }}>
+                  {Object.entries(expanded.facts).map(([key, value]) => (
+                    <View key={key}>
+                      <Copy style={{ color: c.muted, fontSize: 14 }}>
+                        {key}
+                      </Copy>
+                      <Copy
+                        selectable
+                        style={{ marginTop: 3, fontWeight: "500" }}
+                      >
+                        {value}
+                      </Copy>
+                    </View>
+                  ))}
+                </View>
+                <Copy style={{ color: c.muted, marginTop: 20, fontSize: 14 }}>
+                  {isLive
+                    ? "Approve and exactly this runs. Deny and nothing happens."
+                    : "This action is simulated. No real message, order, or charge is sent."}
+                </Copy>
+              </ScrollView>
+              <View
+                style={{
+                  padding: 20,
+                  borderTopWidth: StyleSheet.hairlineWidth,
+                  borderTopColor: c.line,
+                  gap: 10,
+                }}
+              >
+                <Button
+                  label="Approve"
+                  disabled={
+                    state.network !== "online" ||
+                    Date.parse(expanded.expires_at) <= now
+                  }
+                  onPress={async () => {
+                    await decideApproval(otto, expanded.id, "approve");
+                    void Haptics.notificationAsync(
+                      Haptics.NotificationFeedbackType.Success,
+                    );
+                    setExpandedId(undefined);
+                  }}
+                />
+                <Button
+                  destructive
+                  label="Deny"
+                  disabled={
+                    state.network !== "online" ||
+                    Date.parse(expanded.expires_at) <= now
+                  }
+                  onPress={async () => {
+                    await decideApproval(otto, expanded.id, "deny");
+                    void Haptics.notificationAsync(
+                      Haptics.NotificationFeedbackType.Warning,
+                    );
+                    setExpandedId(undefined);
+                  }}
+                />
+                <Button
+                  quiet
+                  label="Open Urgent"
+                  onPress={() => {
+                    dismiss();
+                    router.push("/urgent");
+                  }}
+                />
+              </View>
+            </View>
+          </View>
+        )}
       </Modal>
-    </View>
+    </>
   );
 }
 const styles = StyleSheet.create({
