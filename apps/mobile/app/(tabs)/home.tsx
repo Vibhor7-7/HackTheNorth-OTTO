@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   View,
   Pressable,
@@ -41,23 +41,29 @@ export default function Home() {
   const state = useOtto();
   const { fontScale, width } = useWindowDimensions();
   const largeText = fontScale > 1.3;
-  const [home, setHome] = useState<HomePayload>();
   const [refreshing, setRefreshing] = useState(false);
   const [selected, setSelected] = useState(6);
+  // APP-15: one call paints Home, then everything arrives over SSE. So this
+  // fetch runs once, on mount, and the sections below are derived from the
+  // store. It used to re-run whenever the store's arrays changed - but the fetch
+  // itself publishes fresh arrays into the store, so against the live server
+  // that was an unbounded request loop that re-rendered every screen until the
+  // app stopped responding to touch.
   useEffect(() => {
-    let live = true;
-    void otto.getHome()
-      .then((value) => {
-        if (live) setHome(value);
-      })
-      // Offline is a state this screen already renders - NetworkBanner says so and
-      // the cards fall back to SSE state. An unhandled rejection here instead threw
-      // a red box over the whole app the moment the server was unreachable.
-      .catch(() => {});
-    return () => {
-      live = false;
-    };
-  }, [state.approvals, state.connections, state.actionItems, state.tasks]);
+    // Offline is a state this screen already renders - NetworkBanner says so and
+    // the cards fall back to SSE state. An unhandled rejection here instead threw
+    // a red box over the whole app the moment the server was unreachable.
+    void otto.getHome().catch(() => {});
+  }, []);
+  const home = useMemo<HomePayload>(
+    () => ({
+      approvals: state.approvals.filter((a) => a.status === "pending"),
+      connections: state.connections.filter((r) => r.status === "pending"),
+      action_items: state.actionItems.filter((a) => a.status === "open"),
+      recent_tasks: state.tasks,
+    }),
+    [state.approvals, state.connections, state.actionItems, state.tasks],
+  );
   const y = useSharedValue(0);
   const reduced = useReducedMotion();
   const scroll = useAnimatedScrollHandler((e) => {
@@ -80,10 +86,10 @@ export default function Home() {
   const tasks = state.tasks;
   const active = tasks.filter((t) => t.status === "running");
   const urgent =
-    (home?.approvals.length ?? 0) +
-    (home?.connections.length ?? 0) +
+    (home.approvals.length ?? 0) +
+    (home.connections.length ?? 0) +
     tasks.filter((t) => t.status === "needs_input").length;
-  const approval = [...(home?.approvals ?? [])].sort((a, b) =>
+  const approval = [...(home.approvals ?? [])].sort((a, b) =>
     a.expires_at.localeCompare(b.expires_at),
   )[0];
   const primaryTask =
@@ -96,7 +102,7 @@ export default function Home() {
   const openUrgent = () => {
     if (approval)
       router.push({ pathname: "/approval/[id]", params: { id: approval.id } });
-    else if (home?.connections[0])
+    else if (home.connections[0])
       router.push({
         pathname: "/connect/[id]",
         params: { id: home.connections[0].toolkit },
@@ -135,7 +141,6 @@ export default function Home() {
             onRefresh={async () => {
               setRefreshing(true);
               try {
-                setHome(await otto.getHome());
                 await otto.refresh();
               } catch {
                 // Pull-to-refresh against a server that is down is not an error
@@ -438,7 +443,7 @@ export default function Home() {
           style={[h.channel, { marginTop: 24 }]}
         >
           <Copy style={{ flex: 1, fontWeight: "600" }}>
-            {home?.action_items.length ?? 0} suggested actions
+            {home.action_items.length ?? 0} suggested actions
           </Copy>
           <Feather name="arrow-right" size={22} color={c.accent} />
         </Pressable>
