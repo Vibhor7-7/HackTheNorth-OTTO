@@ -7,6 +7,9 @@ anything risky.
 Built at Hack the North 2026. **`MainPRD.md` is the spec; read it first.**
 `AGENTS.md` has the commands, the layout and the invariants.
 
+
+** Composio Track Winner at HackTHeNorth
+
 ```sh
 pnpm install
 cp apps/server/.env.example apps/server/.env    # add OPENAI_API_KEY
