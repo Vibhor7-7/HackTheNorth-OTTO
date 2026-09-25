@@ -10,6 +10,8 @@ Built at Hack the North 2026. **`MainPRD.md` is the spec; read it first.**
 
 Composio Track Winner at HackTHeNorth
 
+Check out our demo here: https://www.youtube.com/watch?v=QVRdKxlLYfg
+
 ```sh
 pnpm install
 cp apps/server/.env.example apps/server/.env    # add OPENAI_API_KEY
